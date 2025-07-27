@@ -1,0 +1,16 @@
+{
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:phase1": "playwright test tests/phase1.spec.ts",
+    "test:visual": "playwright test tests/phase1-visual.spec.ts",
+    "test:update-snapshots": "playwright test tests/phase1-visual.spec.ts --update-snapshots",
+    "test:report": "playwright show-report",
+    "test:install": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  }
+}

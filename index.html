@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Village Builder - Farming Sandbox</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    
+    #game-container {
+      width: 100vw;
+      height: 100vh;
+    }
+    
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 24px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: white;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    #info-panel {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      color: white;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      min-width: 200px;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="loading">Loading...</div>
+  </div>
+  
+  <div id="controls" style="display: none;">
+    <strong>Controls:</strong><br>
+    WASD - Move<br>
+    Shift - Run<br>
+    Hold Middle Mouse - Look Around<br>
+    Tab - Open Action Wheel<br>
+    1-9 - Select Inventory Item<br>
+    Left Click - Use Item/Action<br>
+    Right Click - Quick Remove<br>
+    Scroll - Zoom Camera<br>
+    Shift + Scroll - Adjust Layer<br>
+    <br>
+    <strong>Action Hotkeys:</strong><br>
+    G - Toggle Grid<br>
+    V - Toggle Soil View<br>
+    R - Remove Soil<br>
+    H - Harvest<br>
+    U - Uproot Plant
+  </div>
+  
+  <div id="info-panel" style="display: none;">
+    <div id="info-content"></div>
+    <button id="jump-to-morning" style="margin-top: 10px; padding: 5px 10px; width: 100%; cursor: pointer;">
+      Jump to 6 AM
+    </button>
+  </div>
+  
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

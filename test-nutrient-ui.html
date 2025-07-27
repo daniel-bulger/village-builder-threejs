@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Nutrient UI Test</title>
+  <style>
+    body { font-family: monospace; padding: 20px; }
+    button { margin: 5px; padding: 10px; }
+    #output { background: #f0f0f0; padding: 10px; margin-top: 20px; white-space: pre; }
+  </style>
+</head>
+<body>
+  <h1>Nutrient System UI Test</h1>
+  
+  <button onclick="setupTest()">1. Setup Test Soil</button>
+  <button onclick="checkNutrients()">2. Check Nutrients</button>
+  <button onclick="depleteNutrients()">3. Deplete Nutrients (Tomato)</button>
+  <button onclick="addNitrogen()">4. Add Nitrogen (Beans)</button>
+  <button onclick="updateColors()">5. Force Color Update</button>
+  
+  <div id="output"></div>
+
+  <script>
+    function log(msg) {
+      const output = document.getElementById('output');
+      output.textContent += msg + '\n';
+    }
+    
+    function getGame() {
+      return window.opener?.game || window.parent?.game || window.game;
+    }
+    
+    function setupTest() {
+      const game = getGame();
+      if (!game) {
+        log('ERROR: Game not found');
+        return;
+      }
+      
+      log('Setting up test...');
+      
+      // Place soil at origin
+      const coord = { q: 0, r: 0, y: 0 };
+      game.soilManager.placeSoil(coord);
+      log('Soil placed at (0,0,0)');
+      
+      // Add water
+      const waterSim = game.soilManager.getWaterSimulation();
+      waterSim.addWater(coord, 50000);
+      log('Water added: 50L');
+      
+      // Check initial nutrients
+      const nutrientSystem = game.soilManager.getNutrientSystem();
+      const nutrients = nutrientSystem.getNutrients(coord);
+      log(`Initial nutrients: N:${(nutrients.nitrogen*100).toFixed(0)}% P:${(nutrients.phosphorus*100).toFixed(0)}% K:${(nutrients.potassium*100).toFixed(0)}%`);
+    }
+    
+    function checkNutrients() {
+      const game = getGame();
+      if (!game) {
+        log('ERROR: Game not found');
+        return;
+      }
+      
+      const coord = { q: 0, r: 0, y: 0 };
+      const nutrientSystem = game.soilManager.getNutrientSystem();
+      const nutrients = nutrientSystem.getNutrients(coord);
+      
+      if (nutrients) {
+        log(`Current nutrients: N:${(nutrients.nitrogen*100).toFixed(0)}% P:${(nutrients.phosphorus*100).toFixed(0)}% K:${(nutrients.potassium*100).toFixed(0)}%`);
+        
+        // Also check hover info
+        game.soilManager.hoveredHex = coord;
+        game.soilManager.hoveredY = 0;
+        const info = game.soilManager.getHoveredHexNutrientInfo();
+        log(`Hover info: ${info}`);
+      } else {
+        log('No nutrients found at (0,0,0)');
+      }
+    }
+    
+    function depleteNutrients() {
+      const game = getGame();
+      if (!game) {
+        log('ERROR: Game not found');
+        return;
+      }
+      
+      log('Depleting nutrients (tomato growth)...');
+      
+      const coord = { q: 0, r: 0, y: 0 };
+      const nutrientSystem = game.soilManager.getNutrientSystem();
+      
+      // Simulate tomato growth through 2 stages
+      nutrientSystem.depleteNutrients(coord, 'tomato', 0);
+      log('Stage 0 complete');
+      
+      nutrientSystem.depleteNutrients(coord, 'tomato', 1);
+      log('Stage 1 complete');
+      
+      // Check new levels
+      const nutrients = nutrientSystem.getNutrients(coord);
+      log(`After depletion: N:${(nutrients.nitrogen*100).toFixed(0)}% P:${(nutrients.phosphorus*100).toFixed(0)}% K:${(nutrients.potassium*100).toFixed(0)}%`);
+      
+      // Update colors
+      game.soilManager.updateSoilColors();
+      log('Colors updated');
+    }
+    
+    function addNitrogen() {
+      const game = getGame();
+      if (!game) {
+        log('ERROR: Game not found');
+        return;
+      }
+      
+      log('Adding nitrogen (bean growth)...');
+      
+      const coord = { q: 0, r: 0, y: 0 };
+      const nutrientSystem = game.soilManager.getNutrientSystem();
+      
+      // Simulate bean growth
+      nutrientSystem.depleteNutrients(coord, 'beans', 0);
+      log('Bean stage 0 complete');
+      
+      // Check new levels
+      const nutrients = nutrientSystem.getNutrients(coord);
+      log(`After beans: N:${(nutrients.nitrogen*100).toFixed(0)}% P:${(nutrients.phosphorus*100).toFixed(0)}% K:${(nutrients.potassium*100).toFixed(0)}%`);
+      
+      // Update colors
+      game.soilManager.updateSoilColors();
+    }
+    
+    function updateColors() {
+      const game = getGame();
+      if (!game) {
+        log('ERROR: Game not found');
+        return;
+      }
+      
+      log('Forcing color update...');
+      game.soilManager.updateSoilColors();
+      log('Done');
+    }
+    
+    // Clear output on load
+    document.getElementById('output').textContent = 'Click buttons in order to test nutrient system\n\n';
+  </script>
+</body>
+</html>

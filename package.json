@@ -1,0 +1,36 @@
+{
+  "name": "village-builder-threejs",
+  "version": "0.1.0",
+  "description": "A farming sandbox game with Three.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "playwright test",
+    "test:unit": "jest",
+    "test:unit:watch": "jest --watch",
+    "test:unit:coverage": "jest --coverage",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:phase1": "playwright test tests/phase1.spec.ts",
+    "test:phase1-complete": "playwright test tests/phase1-complete.spec.ts",
+    "test:visual": "playwright test tests/phase1-visual.spec.ts",
+    "test:update-snapshots": "playwright test tests/phase1-visual.spec.ts --update-snapshots",
+    "test:report": "playwright show-report",
+    "test:install": "playwright install chromium"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/three": "^0.160.0",
+    "@types/jest": "^29.5.11",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}
