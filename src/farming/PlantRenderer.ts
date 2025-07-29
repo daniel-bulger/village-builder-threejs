@@ -193,6 +193,12 @@ export class PlantRenderer {
   
   constructor(private scene: THREE.Scene) {}
   
+  public setVisible(visible: boolean): void {
+    for (const visual of this.plantVisuals.values()) {
+      visual.group.visible = visible;
+    }
+  }
+  
   updatePlants(plants: Array<{plant: PlantState, type: PlantType}>): void {
     // Remove visuals for plants that no longer exist
     const currentIds = new Set(plants.map(p => p.plant.id));

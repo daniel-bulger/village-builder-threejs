@@ -195,8 +195,11 @@ export class SoilManager {
     if (this.hoveredHex) {
       const hex3D: HexCoord3D = { ...this.hoveredHex, y: this.hoveredY };
       
-      // Handle tool actions on left click
-      if (input.mouseLeft && !this.mouseWasDown) {
+      // Handle tool actions on left click (only if inventory/action wheel is not open)
+      const game = (window as any).game;
+      const inventoryOpen = game?.unifiedInventoryUI?.isInventoryOpen?.() || false;
+      const actionWheelOpen = game?.actionWheel?.isActionWheelVisible?.() || false;
+      if (input.mouseLeft && !this.mouseWasDown && !inventoryOpen && !actionWheelOpen) {
         if (input.currentTool === 'place') {
           this.placeSoil(hex3D);
         } else if (input.currentTool === 'remove') {
@@ -219,6 +222,8 @@ export class SoilManager {
           this.plantOrganicSeed(hex3D, this.hoveredWorldPos!);
         } else if (input.currentTool === 'soil_place') {
           this.handleSoilPlacement(hex3D, input);
+        } else if (input.currentTool === 'place_soil') {
+          this.placeSoilFromInventory(hex3D);
         }
       }
       
@@ -228,8 +233,11 @@ export class SoilManager {
       }
     }
     
-    // Handle edge barrier placement separately
-    if (input.currentTool === 'barrier' && this.hoveredEdge && input.mouseLeft && !this.mouseWasDown) {
+    // Handle edge barrier placement separately (only if inventory/action wheel is not open)
+    const game = (window as any).game;
+    const inventoryOpen = game?.unifiedInventoryUI?.isInventoryOpen?.() || false;
+    const actionWheelOpen = game?.actionWheel?.isActionWheelVisible?.() || false;
+    if (input.currentTool === 'barrier' && this.hoveredEdge && input.mouseLeft && !this.mouseWasDown && !inventoryOpen && !actionWheelOpen) {
       this.toggleEdgeBarrier(this.hoveredEdge);
     }
     
@@ -418,6 +426,8 @@ export class SoilManager {
           color = hexExists ? 0x00ff88 : Constants.PREVIEW_INVALID_COLOR; // Teal for organic
         } else if (input.currentTool === 'soil_place') {
           color = hexExists ? 0x8B4513 : Constants.PREVIEW_INVALID_COLOR; // Brown for soil placement
+        } else if (input.currentTool === 'place_soil') {
+          color = !hexExists ? 0x8B4513 : Constants.PREVIEW_INVALID_COLOR; // Brown for soil from inventory
         }
         
         this.placementPreview.material.color.setHex(color);
@@ -574,10 +584,10 @@ export class SoilManager {
     // Add to nutrient system with default 50% N-P-K
     this.nutrientSystem.addHex(hexCoord);
     
-    // Update soil color to reflect nutrients
-    const color = this.nutrientSystem.getNutrientColor(hexCoord);
+    // Set initial color based on nutrients (dry soil)
     if (soil.mesh.material instanceof THREE.MeshStandardMaterial) {
-      soil.mesh.material.color = color;
+      const nutrientColor = this.nutrientSystem.getNutrientColor(hexCoord);
+      soil.mesh.material.color = nutrientColor;
       soil.mesh.material.needsUpdate = true;
     }
     
@@ -735,13 +745,17 @@ export class SoilManager {
       
       const saturation = this.waterSimulation.getSaturation(soilHex.coord);
       
-      // Update soil color based on saturation
+      // Update soil appearance based on saturation
       if (soilHex.mesh.material instanceof THREE.MeshStandardMaterial) {
-        // Interpolate between dry and wet colors
-        const dryColor = new THREE.Color(Constants.SOIL_COLOR); // Light tan/sandy brown
-        const wetColor = new THREE.Color(0x2B1A0E); // Very dark brown when wet
+        // Get the base color from nutrients
+        const baseColor = this.nutrientSystem.getNutrientColor(soilHex.coord);
         
-        soilHex.mesh.material.color.lerpColors(dryColor, wetColor, saturation);
+        // Create wet version of the nutrient color (darker)
+        const wetColor = baseColor.clone();
+        wetColor.multiplyScalar(0.3); // Make it much darker when wet
+        
+        // Interpolate between nutrient color and wet version
+        soilHex.mesh.material.color.lerpColors(baseColor, wetColor, saturation);
         soilHex.mesh.material.roughness = 0.95 - (saturation * 0.5); // Less rough when wet
       }
     }
@@ -750,15 +764,9 @@ export class SoilManager {
   // Get water simulation for external access
   // Update soil colors based on nutrient levels
   public updateSoilColors(): void {
-    for (const [key, soil] of this.soilHexes) {
-      const color = this.nutrientSystem.getNutrientColor(soil.coord);
-      if (soil.mesh.material instanceof THREE.MeshStandardMaterial) {
-        // Only update if color actually changed
-        if (!soil.mesh.material.color.equals(color)) {
-          soil.mesh.material.color = color;
-        }
-      }
-    }
+    // Don't update colors directly anymore - let updateWaterVisuals handle the combined effect
+    // Just trigger a water visual update which will incorporate nutrient colors
+    this.updateWaterVisuals();
   }
   
   getWaterSimulation(): WaterSimulation {
@@ -829,13 +837,38 @@ export class SoilManager {
       return false;
     }
     
-    // Add water (10 liters = 10,000 ml per click)
-    const waterAdded = this.waterSimulation.addWater(hexCoord, 10000);
+    // Get the active watering can
+    const game = (window as any).game;
+    const activeItem = game?.unifiedInventorySystem?.getActiveItem();
     
-    // Visual feedback - create water splash particles or something later
+    if (!activeItem || activeItem.id !== 'watering_can') {
+      console.log('No watering can equipped');
+      return false;
+    }
+    
+    // Check if watering can has water
+    const waterInCan = activeItem.metadata?.waterAmount || 0;
+    if (waterInCan < 1000) { // Need at least 1L to water
+      console.log('Watering can is empty!');
+      return false;
+    }
+    
+    // Use up to 10L per click, or whatever is left in the can
+    const waterToUse = Math.min(10000, waterInCan);
+    
+    // Add water to soil
+    const waterAdded = this.waterSimulation.addWater(hexCoord, waterToUse);
+    
     if (waterAdded) {
-      // For now, just update visuals immediately
+      // Reduce water in can
+      activeItem.metadata.waterAmount -= waterToUse;
+      console.log(`Used ${waterToUse/1000}L of water. ${activeItem.metadata.waterAmount/1000}L remaining in can.`);
+      
+      // Update visuals
       this.updateWaterVisuals();
+      
+      // Update UI to show new water amount
+      game?.unifiedInventoryUI?.update();
     }
     
     return waterAdded;
@@ -1148,14 +1181,7 @@ export class SoilManager {
     const plant = this.plantSimulation.getPlantAt(this.tempInspectorPos);
     
     if (plant) {
-      // Check if we're already inspecting this plant
-      if (this.inspectedPlantId === plant.id && this.inspectedPlantType === 'regular') {
-        // Just update position
-        this.plantInspectorUI.updatePosition(screenX, screenY);
-        return;
-      }
-      
-      // Show inspector for regular plant
+      // Show inspector for regular plant (always update content)
       this.inspectedPlantId = plant.id;
       this.inspectedPlantType = 'regular';
       this.lastInspectedHex = null; // Clear soil inspection state
@@ -1170,14 +1196,7 @@ export class SoilManager {
       const organicPlant = this.organicPlantSimulation.getPlantAt(this.tempInspectorPos);
       
       if (organicPlant) {
-        // Check if we're already inspecting this plant
-        if (this.inspectedPlantId === organicPlant.id && this.inspectedPlantType === 'organic') {
-          // Just update position
-          this.organicPlantInspectorUI.updatePosition(screenX, screenY);
-          return;
-        }
-        
-        // Show inspector for organic plant
+        // Show inspector for organic plant (always update content)
         this.inspectedPlantId = organicPlant.id;
         this.inspectedPlantType = 'organic';
         this.lastInspectedHex = null; // Clear soil inspection state
@@ -1276,21 +1295,39 @@ export class SoilManager {
   
   private toggleSoilVisibility(): void {
     this.soilVisible = !this.soilVisible;
-    
+    this.updateVisibility();
+  }
+  
+  public setVisible(visible: boolean): void {
+    this.soilVisible = visible;
+    this.updateVisibility();
+  }
+  
+  private updateVisibility(): void {
     // Toggle visibility of all soil hex meshes
     for (const hex of this.soilHexes.values()) {
       hex.mesh.visible = this.soilVisible;
     }
     
     // Also toggle edge barriers visibility
-    for (const barrier of this.edgeBarriers.values()) {
+    for (const barrier of this.edgeBarrierMeshes.values()) {
       barrier.visible = this.soilVisible;
     }
     
-    // Toggle water visual meshes
-    for (const mesh of this.waterMeshes.values()) {
-      mesh.visible = this.soilVisible;
+    // Hide/show preview hexes
+    if (this.placementPreview) {
+      this.placementPreview.visible = this.soilVisible && this.placementPreview.visible;
     }
+    if (this.subHexPreview) {
+      this.subHexPreview.visible = this.soilVisible && this.subHexPreview.visible;
+    }
+    if (this.edgePreview) {
+      this.edgePreview.visible = this.soilVisible && this.edgePreview.visible;
+    }
+    
+    // Hide/show plant renderers
+    this.plantRenderer.setVisible(this.soilVisible);
+    this.organicPlantRenderer.setVisible(this.soilVisible);
     
     console.log(`Soil visibility: ${this.soilVisible ? 'ON' : 'OFF'}`);
   }
@@ -1320,6 +1357,80 @@ export class SoilManager {
     
     if (success) {
       // Update visual immediately
+      this.updateSoilColors();
+    }
+  }
+  
+  private placeSoilFromInventory(hexCoord: HexCoord3D): void {
+    // Get the game instance to access inventory
+    const game = (window as any).game;
+    if (!game || !game.unifiedInventorySystem) {
+      console.warn('Cannot access unified inventory system');
+      return;
+    }
+    
+    // Check if we can place soil here
+    if (!this.canPlaceSoilAt(hexCoord)) {
+      console.log('Cannot place soil at this location');
+      return;
+    }
+    
+    // Get active item from inventory
+    const activeItem = game.unifiedInventorySystem.getActiveItem();
+    if (!activeItem || activeItem.type !== 'resource' || !activeItem.id.startsWith('soil_')) {
+      console.log('No soil selected in inventory');
+      return;
+    }
+    
+    // Check if we have at least 1 unit of soil
+    const quantity = game.unifiedInventorySystem.getActiveItemQuantity();
+    if (quantity < 1) {
+      console.log('Not enough soil to place (need at least 1 unit)');
+      return;
+    }
+    
+    // Create custom soil hex with nutrient data
+    const hex3DKey = HexUtils.hex3DToKey(hexCoord);
+    const columnKey = HexUtils.hexToKey(hexCoord);
+    
+    const soil = new SoilHex(hexCoord);
+    this.soilHexes.set(hex3DKey, soil);
+    this.scene.add(soil.mesh);
+    
+    // Update column height
+    this.soilColumns.set(columnKey, hexCoord.y);
+    
+    // Add to water simulation (default to loam soil)
+    this.waterSimulation.addHex(hexCoord, SoilType.Loam);
+    
+    // Add to nutrient system with nutrients from inventory item
+    if (activeItem.metadata?.nutrients) {
+      const nutrients = activeItem.metadata.nutrients;
+      console.log('Applying nutrients from inventory:', nutrients);
+      this.nutrientSystem.addHex(hexCoord, {
+        nitrogen: nutrients.nitrogen / 100, // Convert from percentage to 0-1
+        phosphorus: nutrients.phosphorus / 100,
+        potassium: nutrients.potassium / 100
+      });
+    } else {
+      // Default nutrients if none specified
+      this.nutrientSystem.addHex(hexCoord);
+    }
+    
+    // Set initial color based on nutrients (dry soil)
+    if (soil.mesh.material instanceof THREE.MeshStandardMaterial) {
+      const nutrientColor = this.nutrientSystem.getNutrientColor(hexCoord);
+      soil.mesh.material.color = nutrientColor;
+      soil.mesh.material.needsUpdate = true;
+    }
+    
+    // Use one unit of soil from inventory
+    const used = game.unifiedInventorySystem.useActiveItem(1);
+    if (used) {
+      console.log('Placed soil from inventory');
+      // Update UI
+      game.unifiedInventoryUI.update();
+      // Update soil colors to reflect new nutrients
       this.updateSoilColors();
     }
   }

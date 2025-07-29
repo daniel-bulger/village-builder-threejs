@@ -8,13 +8,12 @@ import { Desert } from '../world/Desert';
 import { Lighting } from '../world/Lighting';
 import { HexGrid } from '../farming/HexGrid';
 import { SoilManager } from '../farming/SoilManager';
-import { InventorySystem } from '../inventory/InventorySystem';
+import { UnifiedInventorySystem } from '../inventory/UnifiedInventorySystem';
 import { FarmingActionWheel } from '../inventory/FarmingActions';
-import { InventoryUI } from '../ui/InventoryUI';
-import { SoilInventory } from '../inventory/SoilInventory';
-import { SoilInventoryUI } from '../ui/SoilInventoryUI';
+import { UnifiedInventoryUI } from '../ui/UnifiedInventoryUI';
 import { SoilItem, BIOME_SOILS } from '../items/SoilItem';
-import { SoilPlacerTool } from '../tools/SoilPlacerTool';
+import { PortalWorld, BiomeType } from '../world/PortalWorld';
+import { PortalManager } from '../world/PortalManager';
 
 export class Game {
   // Core
@@ -34,23 +33,24 @@ export class Game {
   // World
   public readonly desert: Desert;
   public readonly lighting: Lighting;
+  public readonly portalManager: PortalManager;
   
   // Farming
   public readonly hexGrid: HexGrid;
   public readonly soilManager: SoilManager;
   
   // Inventory
-  public readonly inventorySystem: InventorySystem;
+  public readonly unifiedInventorySystem: UnifiedInventorySystem;
+  public readonly inventorySystem: UnifiedInventorySystem; // Alias for compatibility
   public readonly actionWheel: FarmingActionWheel;
-  private inventoryUI: InventoryUI;
-  public readonly soilInventory: SoilInventory;
-  private soilInventoryUI: SoilInventoryUI;
-  public readonly soilPlacerTool: SoilPlacerTool;
+  public readonly unifiedInventoryUI: UnifiedInventoryUI;
   
   // State
   public isInitialized = false;
   private animationsEnabled = true;
   public timeScale = 1;
+  private isInPortalWorld = false;
+  private portalWorld: PortalWorld | null = null;
   
   constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer) {
     this.scene = scene;
@@ -64,6 +64,7 @@ export class Game {
     // Initialize world
     this.desert = new Desert(scene);
     this.lighting = new Lighting(scene);
+    this.portalManager = new PortalManager(scene);
     
     // Initialize player
     this.player = new Player();
@@ -76,24 +77,10 @@ export class Game {
     this.soilManager = new SoilManager(scene);
     
     // Initialize inventory system
-    this.inventorySystem = new InventorySystem();
+    this.unifiedInventorySystem = new UnifiedInventorySystem();
+    this.inventorySystem = this.unifiedInventorySystem; // Alias for compatibility
     this.actionWheel = new FarmingActionWheel();
-    this.inventoryUI = new InventoryUI(this.inventorySystem, this.actionWheel);
-    
-    // Initialize soil inventory
-    this.soilInventory = new SoilInventory(8); // 8 slots for soil
-    this.soilInventoryUI = new SoilInventoryUI(this.soilInventory);
-    
-    // Initialize soil placer tool
-    this.soilPlacerTool = new SoilPlacerTool(
-      this.soilInventory, 
-      this.soilManager.getNutrientSystem()
-    );
-    
-    // Connect soil placer tool to soil manager and UI
-    this.soilPlacerTool.setSoilManager(this.soilManager);
-    this.soilManager.setSoilPlacerTool(this.soilPlacerTool);
-    this.soilInventoryUI.setSoilPlacerTool(this.soilPlacerTool);
+    this.unifiedInventoryUI = new UnifiedInventoryUI(this.unifiedInventorySystem);
     
     // Setup time controls
     this.setupTimeControls();
@@ -135,31 +122,107 @@ export class Game {
     
     // Update world
     const worldStart = perfStart('world');
-    this.desert.update(this.player.position);
-    if (this.animationsEnabled) {
-      this.lighting.update(deltaTime);
+    
+    if (this.isInPortalWorld && this.portalWorld) {
+      // Update portal world
+      this.portalWorld.update(deltaTime);
+      
+      // Check for interact key (E)
+      if (inputState.interact) {
+        // Check for exit portal first
+        if (this.portalWorld.isNearExitPortal(this.player.position)) {
+          this.exitPortalWorld();
+        } else {
+          // Check for soil collection
+          const result = this.portalWorld.collectSoilAt(this.player.position);
+          if (result.collected && result.amount) {
+            // Add soil to inventory
+            const nutrients = this.portalWorld.getSoilNutrients();
+            const soil = new SoilItem(nutrients, result.amount, this.portalWorld.biomeType);
+            const added = this.unifiedInventorySystem.addSoil(soil);
+            if (added) {
+              console.log(`Collected ${result.amount} hexes of soil from ${this.portalWorld.biomeType}`);
+            } else {
+              console.log('Inventory full! Could not collect soil.');
+            }
+          }
+        }
+      }
+      
+      // Check if near soil deposit for UI hint
+      if (this.portalWorld.isNearSoilDeposit(this.player.position)) {
+        console.log('[E] to collect soil');
+      }
+      
+      // Check if near water source
+      const waterCheck = this.portalWorld.isNearWaterSource(this.player.position);
+      if (waterCheck.isNear) {
+        const activeItem = this.unifiedInventorySystem.getActiveItem();
+        const isWateringCan = activeItem && activeItem.id === 'watering_can';
+        
+        if (isWateringCan) {
+          const currentWater = activeItem.metadata?.waterAmount || 0;
+          const maxCapacity = activeItem.metadata?.maxCapacity || 100000;
+          
+          // Show hint if can be refilled
+          if (currentWater < maxCapacity) {
+            console.log('[Right-click] to refill watering can');
+            
+            // Handle refill on right click
+            if (inputState.mouseRight) {
+              activeItem.metadata.waterAmount = maxCapacity;
+              console.log('Watering can refilled to maximum capacity!');
+              this.unifiedInventoryUI.update();
+            }
+          } else if (inputState.mouseRight) {
+            console.log('Watering can is already full.');
+          }
+        } else if (inputState.mouseRight) {
+          console.log('Equip watering can to collect water.');
+        }
+      }
+    } else {
+      // Update main world
+      this.desert.update(this.player.position);
+      if (this.animationsEnabled) {
+        this.lighting.update(deltaTime);
+      }
+      
+      // Update portals
+      const currentDay = Math.floor(this.timeManager.getElapsedTime() / 86400); // 24 hours in seconds
+      this.portalManager.update(deltaTime, this.lighting.getTimeOfDay(), currentDay, this.player.position);
+      
+      // Check for portal interaction
+      if (inputState.interact && this.portalManager.isPlayerNearPortal(this.player.position)) {
+        if (this.portalManager.canEnterPortal()) {
+          this.enterPortal();
+        }
+      }
     }
+    
     perfEnd('world', worldStart);
     
-    // Update farming
-    const farmingStart = perfStart('farming');
-    if (inputState.toggleGrid) {
-      this.hexGrid.toggleVisibility();
-    }
-    
-    // Handle inventory input
+    // Handle inventory input (in both main world and portal worlds)
     this.handleInventoryInput(inputState);
     
-    // Convert inventory/action to current tool for SoilManager
-    const currentTool = this.getCurrentToolFromInventory();
-    const activeAction = this.actionWheel.getActiveAction();
-    const modifiedInputState = { 
-      ...inputState, 
-      currentTool,
-      activeAction: activeAction ? activeAction.id : null
-    };
-    
-    this.soilManager.update(modifiedInputState, this.camera);
+    // Update farming (only in main world)
+    const farmingStart = perfStart('farming');
+    if (!this.isInPortalWorld) {
+      if (inputState.toggleGrid) {
+        this.hexGrid.toggleVisibility();
+      }
+      
+      // Convert inventory/action to current tool for SoilManager
+      const currentTool = this.getCurrentToolFromInventory();
+      const activeAction = this.actionWheel.getActiveAction();
+      const modifiedInputState = { 
+        ...inputState, 
+        currentTool,
+        activeAction: activeAction ? activeAction.id : null
+      };
+      
+      this.soilManager.update(modifiedInputState, this.camera);
+    }
     perfEnd('farming', farmingStart);
     
     // Update water simulation
@@ -174,7 +237,7 @@ export class Game {
     // Update UI
     const uiStart = perfStart('ui');
     this.updateInfoPanel();
-    this.inventoryUI.update();
+    this.unifiedInventoryUI.update();
     perfEnd('ui', uiStart);
     
     // Log detailed performance every 120 frames
@@ -233,6 +296,33 @@ export class Game {
     // Get nutrient info
     const nutrientInfo = this.soilManager.getHoveredHexNutrientInfo() || 'No soil';
     
+    // Get portal info
+    let portalInfo = 'None';
+    
+    if (this.isInPortalWorld && this.portalWorld) {
+      // In portal world - show exit hint
+      portalInfo = `<span style="color: #FF6B6B">In ${this.portalWorld.biomeType.replace('_', ' ')}</span>`;
+      if (this.portalWorld.isNearExitPortal(this.player.position)) {
+        portalInfo += ' <span style="color: #4CAF50">[E] Exit</span>';
+      } else {
+        portalInfo += ' <span style="color: #87CEEB">(Find blue portal)</span>';
+      }
+    } else {
+      // In main world - show portal status
+      const portal = this.portalManager.getActivePortal();
+      if (portal) {
+        const timeRemaining = Math.ceil(portal.getTimeRemaining());
+        const minutes = Math.floor(timeRemaining / 60);
+        const seconds = timeRemaining % 60;
+        portalInfo = `${portal.getBiomeType()} (${minutes}:${seconds.toString().padStart(2, '0')})`;
+        
+        // Add interaction hint if near portal
+        if (this.portalManager.isPlayerNearPortal(this.player.position)) {
+          portalInfo += ' <span style="color: #4CAF50">[E] Enter</span>';
+        }
+      }
+    }
+    
     infoContent.innerHTML = `
       <strong>Active:</strong> ${toolDisplay}<br>
       <strong>Time:</strong> ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}<br>
@@ -243,12 +333,17 @@ export class Game {
       <strong>Place at Y:</strong> ${this.soilManager.getPlacementHeight()}<br>
       <strong>Water Level:</strong> ${waterPercent}%<br>
       <strong>Nutrients:</strong> ${nutrientInfo}<br>
+      <strong>Portal:</strong> ${portalInfo}<br>
       <strong>Camera:</strong> ${this.cameraController.getMode()}
     `;
   }
   
   setAnimationsEnabled(enabled: boolean): void {
     this.animationsEnabled = enabled;
+  }
+  
+  getCurrentScene(): THREE.Scene {
+    return this.isInPortalWorld && this.portalWorld ? this.portalWorld.scene : this.scene;
   }
   
   private setupTimeControls(): void {
@@ -262,15 +357,21 @@ export class Game {
     // Debug: Add test soil with 'T' key
     document.addEventListener('keydown', (e) => {
       if (e.key === 't' || e.key === 'T') {
-        // Add variety of test soils
-        this.soilInventory.addSoil(new SoilItem(BIOME_SOILS.FERTILE_VALLEY, 2.5, "Test Valley"));
-        this.soilInventory.addSoil(new SoilItem(BIOME_SOILS.ANCIENT_FOREST, 1.8, "Test Forest"));
-        this.soilInventory.addSoil(new SoilItem(BIOME_SOILS.VOLCANIC_ASH, 3.2, "Test Volcano"));
-        this.soilInventory.addSoil(new SoilItem(BIOME_SOILS.CRYSTAL_CAVES, 1.5, "Test Caves"));
+        // Add variety of test soils to unified inventory
+        this.unifiedInventorySystem.addSoil(new SoilItem(BIOME_SOILS.FERTILE_VALLEY, 2.5, "Test Valley"));
+        this.unifiedInventorySystem.addSoil(new SoilItem(BIOME_SOILS.ANCIENT_FOREST, 1.8, "Test Forest"));
+        this.unifiedInventorySystem.addSoil(new SoilItem(BIOME_SOILS.VOLCANIC_ASH, 3.2, "Test Volcano"));
+        this.unifiedInventorySystem.addSoil(new SoilItem(BIOME_SOILS.CRYSTAL_CAVES, 1.5, "Test Caves"));
         
         // Update UI
-        this.soilInventoryUI.update();
+        this.unifiedInventoryUI.update();
         console.log('Added test soil to inventory!');
+      }
+      
+      // Debug: Spawn portal with 'P' key
+      if (e.key === 'p' || e.key === 'P') {
+        this.portalManager.forceSpawnPortal(this.player.position);
+        console.log('Spawned test portal!');
       }
     });
   }
@@ -296,9 +397,9 @@ export class Game {
   }
   
   private handleInventoryInput(inputState: any): void {
-    // Number keys for inventory slots
+    // Number keys for hotbar slots
     if (inputState.inventorySlot >= 0) {
-      this.inventorySystem.setActiveSlot(inputState.inventorySlot);
+      this.inventorySystem.setActiveHotbarSlot(inputState.inventorySlot);
     }
     
     // Tab to open action wheel
@@ -327,8 +428,13 @@ export class Game {
     }
     
     // Otherwise check active inventory item
-    const activeItem = this.inventorySystem.getActiveItem();
+    const activeItem = this.unifiedInventorySystem.getActiveItem();
     if (activeItem) {
+      // Handle soil items
+      if (activeItem.type === 'resource' && activeItem.id.startsWith('soil_')) {
+        return 'place_soil'; // New tool type for placing soil from inventory
+      }
+      
       // Map item IDs to old tool system
       const itemToTool: { [key: string]: string } = {
         'watering_can': 'water',
@@ -348,5 +454,58 @@ export class Game {
     }
     
     return 'place'; // Default tool
+  }
+  
+  private enterPortal(): void {
+    const portal = this.portalManager.getActivePortal();
+    if (!portal) return;
+    
+    const biomeType = portal.getBiomeType() as BiomeType;
+    console.log(`Entering ${biomeType} portal...`);
+    
+    // Create portal world with its own scene
+    this.portalWorld = new PortalWorld(biomeType);
+    this.isInPortalWorld = true;
+    
+    // Move player to portal world spawn point
+    this.player.position.set(0, 2, 5);
+    
+    // Add player mesh to portal world scene
+    this.portalWorld.scene.add(this.player.mesh);
+    
+    // Move camera's parent group to portal world
+    const cameraParent = this.camera.parent;
+    if (cameraParent) {
+      this.portalWorld.scene.add(cameraParent);
+    }
+  }
+  
+  private exitPortalWorld(): void {
+    if (!this.portalWorld) return;
+    
+    console.log('Exiting portal world...');
+    
+    // Move player mesh back to main scene
+    this.scene.add(this.player.mesh);
+    
+    // Move camera parent back to main scene
+    const cameraParent = this.camera.parent;
+    if (cameraParent) {
+      this.scene.add(cameraParent);
+    }
+    
+    // Return player to main world near portal
+    const portal = this.portalManager.getActivePortal();
+    if (portal) {
+      const portalPos = portal.getPosition();
+      this.player.position.set(portalPos.x + 3, 1, portalPos.z);
+    } else {
+      this.player.position.set(0, 1, 0);
+    }
+    
+    // Clean up portal world
+    this.portalWorld.dispose();
+    this.portalWorld = null;
+    this.isInPortalWorld = false;
   }
 }

@@ -119,9 +119,10 @@ class Application {
     this.game.update();
     const gameTime = performance.now() - gameStart;
     
-    // Render scene
+    // Render current scene (main world or portal world)
     const renderStart = performance.now();
-    this.renderer.render(this.scene, this.camera);
+    const currentScene = this.game.getCurrentScene();
+    this.renderer.render(currentScene, this.camera);
     const renderTime = performance.now() - renderStart;
     
     // Track performance data

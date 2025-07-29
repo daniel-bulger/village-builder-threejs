@@ -23,8 +23,13 @@ npm run dev
 - **Mouse** - Look around (click to capture pointer)
 - **Tab** - Toggle between 3rd person and overhead camera
 - **G** - Toggle hex grid overlay
-- **Left Click** - Place soil
+- **I** - Open inventory
+- **1-9, 0** - Select hotbar slot
+- **Left Click** - Use selected item/tool
 - **Right Click** - Remove soil
+- **E** - Enter nearby portal
+- **P** - Spawn test portal (debug)
+- **T** - Add test soil to inventory (debug)
 
 ## Phase 1 Features Implemented
 

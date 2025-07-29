@@ -30,7 +30,9 @@ export class SoilItem {
     quantity: number,
     source: string = "Unknown"
   ) {
-    this.id = crypto.randomUUID();
+    this.id = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : `soil-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     this.nutrients = { ...nutrients };
     this.quantity = quantity;
     this.moisture = 0; // Portal always dries soil

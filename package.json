@@ -18,6 +18,9 @@
     "test:phase1-complete": "playwright test tests/phase1-complete.spec.ts",
     "test:visual": "playwright test tests/phase1-visual.spec.ts",
     "test:update-snapshots": "playwright test tests/phase1-visual.spec.ts --update-snapshots",
+    "test:inventory": "playwright test tests/unified-inventory*.spec.ts",
+    "test:inventory:soil": "playwright test tests/unified-inventory-soil.spec.ts",
+    "test:inventory:general": "playwright test tests/unified-inventory-general.spec.ts",
     "test:report": "playwright show-report",
     "test:install": "playwright install chromium"
   },

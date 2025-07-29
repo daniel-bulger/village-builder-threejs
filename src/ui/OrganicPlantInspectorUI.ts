@@ -32,15 +32,14 @@ export class OrganicPlantInspectorUI {
     this.visible = true;
     this.container.style.display = 'block';
     
-    // Update content if it's a different plant
-    if (plant.id !== this.lastPlantId) {
-      this.updateContent(plant, plantType);
-      this.lastPlantId = plant.id;
-      // Cache dimensions after content update
-      const rect = this.container.getBoundingClientRect();
-      this.cachedWidth = rect.width;
-      this.cachedHeight = rect.height;
-    }
+    // Update content - remove caching to ensure live updates
+    this.updateContent(plant, plantType);
+    this.lastPlantId = plant.id;
+    
+    // Cache dimensions after content update
+    const rect = this.container.getBoundingClientRect();
+    this.cachedWidth = rect.width;
+    this.cachedHeight = rect.height;
     
     // Position near mouse but keep on screen
     const padding = 20;

@@ -37,17 +37,15 @@ export class PlantInspectorUI {
     this.visible = true;
     this.container.style.display = 'block';
     
-    // Only update content if it's a different plant or enough time has passed
-    const now = Date.now();
-    if (plant.id !== this.lastPlantId || now - this.lastUpdateTime > 500) {
-      this.updateContent(plant, plantType);
-      this.lastPlantId = plant.id;
-      this.lastUpdateTime = now;
-      // Cache dimensions after content update
-      const rect = this.container.getBoundingClientRect();
-      this.cachedWidth = rect.width;
-      this.cachedHeight = rect.height;
-    }
+    // Update content - remove caching to ensure live updates
+    this.updateContent(plant, plantType);
+    this.lastPlantId = plant.id;
+    this.lastUpdateTime = Date.now();
+    
+    // Cache dimensions after content update
+    const rect = this.container.getBoundingClientRect();
+    this.cachedWidth = rect.width;
+    this.cachedHeight = rect.height;
     
     // Position near mouse but keep on screen
     const padding = 20;

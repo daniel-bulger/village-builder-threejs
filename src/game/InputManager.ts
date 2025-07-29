@@ -28,6 +28,9 @@ export interface InputState {
   
   // Inventory
   inventorySlot: number; // 0-9 keys (0 = slot 10)
+  
+  // Interaction
+  interact: boolean; // E key
 }
 
 export class InputManager {
@@ -38,7 +41,8 @@ export class InputManager {
   private toggleStates = {
     camera: false,
     grid: false,
-    soilVisibility: false
+    soilVisibility: false,
+    interact: false
   };
   private scrollAccumulator = 0;
   private scrollWithShift = false;
@@ -67,7 +71,8 @@ export class InputManager {
       toggleGrid: false,
       toggleSoilVisibility: false,
       toggleOrganicGrowth: false,
-      inventorySlot: -1
+      inventorySlot: -1,
+      interact: false
     };
   }
   
@@ -106,6 +111,9 @@ export class InputManager {
         break;
       case 'h':
         this.toggleStates.soilVisibility = true;
+        break;
+      case 'e':
+        this.toggleStates.interact = true;
         break;
     }
   }
@@ -197,11 +205,13 @@ export class InputManager {
     this.state.toggleCamera = this.toggleStates.camera;
     this.state.toggleGrid = this.toggleStates.grid;
     this.state.toggleSoilVisibility = this.toggleStates.soilVisibility;
+    this.state.interact = this.toggleStates.interact;
     
     // Clear toggle states for next frame
     this.toggleStates.camera = false;
     this.toggleStates.grid = false;
     this.toggleStates.soilVisibility = false;
+    this.toggleStates.interact = false;
     
     // Check for inventory slot switching with number keys
     if (this.keys.has('1')) {

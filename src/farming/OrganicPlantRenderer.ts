@@ -293,6 +293,12 @@ export class OrganicPlantRenderer {
   
   constructor(private scene: THREE.Scene) {}
   
+  public setVisible(visible: boolean): void {
+    for (const visual of this.plantVisuals.values()) {
+      visual.group.visible = visible;
+    }
+  }
+  
   setShowGrowthPoints(show: boolean): void {
     this.showGrowthPoints = show;
     // Update all existing visuals
