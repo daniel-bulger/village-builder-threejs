@@ -827,13 +827,36 @@ export class UnifiedInventoryUI {
     } else if (item.type === ItemType.SEED) {
       // Show seed details
       const seedDescriptions: { [key: string]: string } = {
-        'tomato_seeds': 'Grows delicious tomatoes\nNeeds: High phosphorus'
+        'tomato_seeds': 'Grows delicious tomatoes\nNeeds: High phosphorus',
+        'lettuce_seeds': 'Fast-growing leafy greens\nNeeds: High nitrogen',
+        'carrot_seeds': 'Sweet root vegetables\nNeeds: Loose, sandy soil',
+        'bean_seeds': 'Nitrogen-fixing legumes\nImproves soil quality',
+        'mushroom_spores': 'Grows in shade\nNeeds: Moist conditions',
+        'herb_seeds': 'Aromatic cooking herbs\nNeeds: Well-drained soil',
+        'pepper_seeds': 'Spicy hot peppers\nNeeds: Warm temperatures',
+        'eggplant_seeds': 'Purple vegetables\nNeeds: High phosphorus',
+        'potato_seeds': 'Starchy tubers\nNeeds: High potassium',
+        'crystal_seeds': 'Mystical crystal flowers\nNeeds: High potassium',
+        'glowberry_seeds': 'Luminescent berries\nNeeds: Dark environments',
+        'moss_spores': 'Cave-dwelling moss\nNeeds: Humid conditions'
       };
       
       if (seedDescriptions[item.id]) {
         description += `\n${seedDescriptions[item.id]}`;
       } else if (item.metadata?.plantType) {
         description += `\nPlant Type: ${item.metadata.plantType}`;
+      }
+      
+      // Add biome origin
+      if (item.metadata?.biomeOrigin) {
+        const biomeNames: { [key: string]: string } = {
+          'fertile_valley': 'Fertile Valley',
+          'ancient_forest': 'Ancient Forest',
+          'volcanic_ash': 'Volcanic Ash',
+          'crystal_caves': 'Crystal Caves'
+        };
+        const biomeName = biomeNames[item.metadata.biomeOrigin] || item.metadata.biomeOrigin;
+        description += `\nOrigin: ${biomeName}`;
       }
     } else if (item.type === ItemType.PLANT) {
       // Show uprooted plant details

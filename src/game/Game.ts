@@ -14,6 +14,7 @@ import { UnifiedInventoryUI } from '../ui/UnifiedInventoryUI';
 import { SoilItem, BIOME_SOILS } from '../items/SoilItem';
 import { PortalWorld, BiomeType } from '../world/PortalWorld';
 import { PortalManager } from '../world/PortalManager';
+import { ItemType } from '../inventory/InventorySystem';
 
 export class Game {
   // Core
@@ -133,25 +134,60 @@ export class Game {
         if (this.portalWorld.isNearExitPortal(this.player.position)) {
           this.exitPortalWorld();
         } else {
+          // Try collections in order: soil, wild plants, seed pods
+          let collected = false;
+          
           // Check for soil collection
-          const result = this.portalWorld.collectSoilAt(this.player.position);
-          if (result.collected && result.amount) {
+          const soilResult = this.portalWorld.collectSoilAt(this.player.position);
+          if (soilResult.collected && soilResult.amount) {
             // Add soil to inventory
             const nutrients = this.portalWorld.getSoilNutrients();
-            const soil = new SoilItem(nutrients, result.amount, this.portalWorld.biomeType);
+            const soil = new SoilItem(nutrients, soilResult.amount, this.portalWorld.biomeType);
             const added = this.unifiedInventorySystem.addSoil(soil);
             if (added) {
-              console.log(`Collected ${result.amount} hexes of soil from ${this.portalWorld.biomeType}`);
+              console.log(`Collected ${soilResult.amount} hexes of soil from ${this.portalWorld.biomeType}`);
             } else {
               console.log('Inventory full! Could not collect soil.');
+            }
+            collected = true;
+          }
+          
+          // Check for wild plant seeds
+          if (!collected) {
+            const plantResult = this.portalWorld.collectSeedsFromPlant(this.player.position);
+            if (plantResult.collected && plantResult.seedType && plantResult.seedCount) {
+              const added = this.unifiedInventorySystem.addSeeds(plantResult.seedType, plantResult.seedCount);
+              if (added) {
+                console.log(`Collected ${plantResult.seedCount} ${plantResult.seedType}`);
+              } else {
+                console.log('Inventory full! Could not collect seeds.');
+              }
+              collected = true;
+            }
+          }
+          
+          // Check for seed pods
+          if (!collected) {
+            const podResult = this.portalWorld.collectSeedPod(this.player.position);
+            if (podResult.collected && podResult.seedType && podResult.seedCount) {
+              const added = this.unifiedInventorySystem.addSeeds(podResult.seedType, podResult.seedCount);
+              if (added) {
+                console.log(`Found ${podResult.seedCount} ${podResult.seedType} in seed pod`);
+              } else {
+                console.log('Inventory full! Could not collect seeds.');
+              }
             }
           }
         }
       }
       
-      // Check if near soil deposit for UI hint
+      // Check proximity for UI hints
       if (this.portalWorld.isNearSoilDeposit(this.player.position)) {
         console.log('[E] to collect soil');
+      } else if (this.portalWorld.isNearWildPlant(this.player.position)) {
+        console.log('[E] to collect seeds from plant');
+      } else if (this.portalWorld.isNearSeedPod(this.player.position)) {
+        console.log('[E] to pick up seed pod');
       }
       
       // Check if near water source
@@ -431,22 +467,26 @@ export class Game {
     const activeItem = this.unifiedInventorySystem.getActiveItem();
     if (activeItem) {
       // Handle soil items
-      if (activeItem.type === 'resource' && activeItem.id.startsWith('soil_')) {
+      if (activeItem.type === ItemType.RESOURCE && activeItem.id.startsWith('soil_')) {
         return 'place_soil'; // New tool type for placing soil from inventory
+      }
+      
+      // Handle seed items - check type instead of specific IDs
+      if (activeItem.type === ItemType.SEED) {
+        return 'plant'; // All seeds use the plant tool
       }
       
       // Map item IDs to old tool system
       const itemToTool: { [key: string]: string } = {
         'watering_can': 'water',
         'shovel': 'place',
-        'tomato_seeds': 'plant',
         'inspector': 'inspect',
         'barrier_tool': 'barrier',
         'soil_placer': 'soil_place'
       };
       
       // Handle uprooted plants
-      if (activeItem.type === 'plant' && activeItem.id.startsWith('uprooted_')) {
+      if (activeItem.type === ItemType.PLANT && activeItem.id.startsWith('uprooted_')) {
         return 'plant'; // Use plant tool to replant
       }
       

@@ -20,11 +20,32 @@ interface WaterSource {
   particleSystem: THREE.Points;
 }
 
+interface WildPlant {
+  position: THREE.Vector3;
+  hexCoord: HexCoord;
+  mesh: THREE.Group;
+  plantType: string;
+  seedType: string;
+  collected: boolean;
+  seedCount: number;
+}
+
+interface SeedPod {
+  position: THREE.Vector3;
+  hexCoord: HexCoord;
+  mesh: THREE.Mesh;
+  seedType: string;
+  seedCount: number;
+  collected: boolean;
+}
+
 export class PortalWorld {
   public readonly scene: THREE.Scene;
   public readonly biomeType: BiomeType;
   private soilDeposits: SoilDeposit[] = [];
   private waterSources: WaterSource[] = [];
+  private wildPlants: WildPlant[] = [];
+  private seedPods: SeedPod[] = [];
   private exitPortal: THREE.Group;
   private ambientLight: THREE.AmbientLight;
   private directionalLight: THREE.DirectionalLight;
@@ -39,6 +60,26 @@ export class PortalWorld {
   private readonly MIN_DEPOSIT_AMOUNT = 0.5;
   private readonly MAX_DEPOSIT_AMOUNT = 2.0;
   
+  // Biome-specific seed types
+  private readonly BIOME_SEEDS: Record<BiomeType, { plants: string[], pods: string[] }> = {
+    'fertile_valley': {
+      plants: ['tomato', 'lettuce', 'carrot'],
+      pods: ['tomato_seeds', 'lettuce_seeds', 'carrot_seeds']
+    },
+    'ancient_forest': {
+      plants: ['beans', 'mushroom', 'herbs'],
+      pods: ['bean_seeds', 'mushroom_spores', 'herb_seeds']
+    },
+    'volcanic_ash': {
+      plants: ['pepper', 'eggplant', 'potato'],
+      pods: ['pepper_seeds', 'eggplant_seeds', 'potato_seeds']
+    },
+    'crystal_caves': {
+      plants: ['crystal_flower', 'glowberry', 'cave_moss'],
+      pods: ['crystal_seeds', 'glowberry_seeds', 'moss_spores']
+    }
+  };
+  
   constructor(biomeType: BiomeType) {
     this.scene = new THREE.Scene();
     this.biomeType = biomeType;
@@ -47,6 +88,8 @@ export class PortalWorld {
     this.generateTerrain();
     this.generateSoilDeposits();
     this.generateWaterSources();
+    this.generateWildPlants();
+    this.generateSeedPods();
     this.createExitPortal();
   }
   
@@ -376,6 +419,189 @@ export class PortalWorld {
     return false;
   }
   
+  private generateWildPlants(): void {
+    const plantTypes = this.BIOME_SEEDS[this.biomeType].plants;
+    const plantCount = Math.floor(Math.random() * 5) + 3; // 3-7 wild plants
+    
+    for (let i = 0; i < plantCount; i++) {
+      // Generate position away from center
+      let hexCoord: HexCoord;
+      let attempts = 0;
+      
+      do {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = Math.random() * (this.WORLD_RADIUS - 3) + 3;
+        
+        const q = Math.round(Math.cos(angle) * distance);
+        const r = Math.round(Math.sin(angle) * distance);
+        
+        hexCoord = { q, r };
+        attempts++;
+      } while (
+        Math.abs(hexCoord.q + hexCoord.r) > this.WORLD_RADIUS || 
+        this.isNearOtherWildPlant(hexCoord) ||
+        attempts < 20
+      );
+      
+      const worldPos = HexUtils.hexToWorld(hexCoord);
+      worldPos.y = 0;
+      
+      // Choose random plant type for this biome
+      const plantType = plantTypes[Math.floor(Math.random() * plantTypes.length)];
+      
+      // Create wild plant mesh group
+      const plantGroup = new THREE.Group();
+      
+      // Stem
+      const stemGeometry = new THREE.CylinderGeometry(0.05, 0.08, 0.8);
+      const stemMaterial = new THREE.MeshLambertMaterial({ color: 0x4A5D23 });
+      const stem = new THREE.Mesh(stemGeometry, stemMaterial);
+      stem.position.y = 0.4;
+      plantGroup.add(stem);
+      
+      // Leaves/flowers based on plant type
+      const leafColor = this.getPlantColor(plantType);
+      const leafGeometry = new THREE.SphereGeometry(0.3, 6, 4);
+      const leafMaterial = new THREE.MeshLambertMaterial({ 
+        color: leafColor,
+        emissive: leafColor,
+        emissiveIntensity: 0.2
+      });
+      
+      // Add multiple leaves
+      for (let j = 0; j < 3; j++) {
+        const leaf = new THREE.Mesh(leafGeometry, leafMaterial);
+        const angle = (j / 3) * Math.PI * 2;
+        leaf.position.set(
+          Math.cos(angle) * 0.2,
+          0.6 + Math.random() * 0.2,
+          Math.sin(angle) * 0.2
+        );
+        leaf.scale.setScalar(0.8 + Math.random() * 0.4);
+        plantGroup.add(leaf);
+      }
+      
+      // Add glow for mature plants with seeds
+      const glowLight = new THREE.PointLight(leafColor, 0.3, 2);
+      glowLight.position.y = 0.8;
+      plantGroup.add(glowLight);
+      
+      plantGroup.position.copy(worldPos);
+      this.scene.add(plantGroup);
+      
+      this.wildPlants.push({
+        position: worldPos,
+        hexCoord,
+        mesh: plantGroup,
+        plantType,
+        seedType: plantType + '_seeds',
+        collected: false,
+        seedCount: Math.floor(Math.random() * 4) + 2 // 2-5 seeds
+      });
+    }
+  }
+  
+  private isNearOtherWildPlant(hexCoord: HexCoord): boolean {
+    for (const plant of this.wildPlants) {
+      const distance = HexUtils.hexDistance(hexCoord, plant.hexCoord);
+      if (distance < 3) return true;
+    }
+    return false;
+  }
+  
+  private getPlantColor(plantType: string): number {
+    const colors: Record<string, number> = {
+      'tomato': 0xFF6B6B,
+      'lettuce': 0x90EE90,
+      'carrot': 0xFF8C00,
+      'beans': 0x228B22,
+      'mushroom': 0x8B7355,
+      'herbs': 0x9ACD32,
+      'pepper': 0xFF4500,
+      'eggplant': 0x8B008B,
+      'potato': 0x8B7D6B,
+      'crystal_flower': 0xE6E6FA,
+      'glowberry': 0x00CED1,
+      'cave_moss': 0x556B2F
+    };
+    return colors[plantType] || 0x90EE90;
+  }
+  
+  private generateSeedPods(): void {
+    const seedTypes = this.BIOME_SEEDS[this.biomeType].pods;
+    const podCount = Math.floor(Math.random() * 4) + 2; // 2-5 seed pods
+    
+    for (let i = 0; i < podCount; i++) {
+      // Generate position
+      let hexCoord: HexCoord;
+      let attempts = 0;
+      
+      do {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = Math.random() * (this.WORLD_RADIUS - 2) + 2;
+        
+        const q = Math.round(Math.cos(angle) * distance);
+        const r = Math.round(Math.sin(angle) * distance);
+        
+        hexCoord = { q, r };
+        attempts++;
+      } while (
+        Math.abs(hexCoord.q + hexCoord.r) > this.WORLD_RADIUS || 
+        attempts < 20
+      );
+      
+      const worldPos = HexUtils.hexToWorld(hexCoord);
+      worldPos.y = 0.1; // Slightly above ground
+      
+      // Choose random seed type
+      const seedType = seedTypes[Math.floor(Math.random() * seedTypes.length)];
+      
+      // Create seed pod mesh
+      const podGeometry = new THREE.SphereGeometry(0.15, 8, 6);
+      const podColor = this.getSeedPodColor();
+      const podMaterial = new THREE.MeshLambertMaterial({
+        color: podColor,
+        emissive: podColor,
+        emissiveIntensity: 0.3
+      });
+      
+      const podMesh = new THREE.Mesh(podGeometry, podMaterial);
+      podMesh.position.copy(worldPos);
+      
+      // Add small glow
+      const glowLight = new THREE.PointLight(podColor, 0.2, 1);
+      glowLight.position.copy(worldPos);
+      glowLight.position.y = 0.2;
+      this.scene.add(glowLight);
+      
+      this.scene.add(podMesh);
+      
+      this.seedPods.push({
+        position: worldPos,
+        hexCoord,
+        mesh: podMesh,
+        seedType,
+        seedCount: Math.floor(Math.random() * 3) + 1, // 1-3 seeds
+        collected: false
+      });
+    }
+  }
+  
+  private getSeedPodColor(): number {
+    switch (this.biomeType) {
+      case 'fertile_valley':
+        return 0xDAA520; // Goldenrod
+      case 'ancient_forest':
+        return 0x8B4513; // Saddle brown
+      case 'volcanic_ash':
+        return 0x696969; // Dim gray
+      case 'crystal_caves':
+        return 0x9370DB; // Medium purple
+      default:
+        return 0x8B7D6B;
+    }
+  }
+  
   private createExitPortal(): void {
     // Create return portal at center
     this.exitPortal = new THREE.Group();
@@ -473,6 +699,24 @@ export class PortalWorld {
       }
     });
     
+    // Animate wild plants
+    this.wildPlants.forEach(plant => {
+      if (!plant.collected && plant.mesh.parent) {
+        // Gentle swaying motion
+        plant.mesh.rotation.z = Math.sin(Date.now() * 0.001 + plant.position.x) * 0.05;
+        plant.mesh.rotation.x = Math.sin(Date.now() * 0.0012 + plant.position.z) * 0.03;
+      }
+    });
+    
+    // Animate seed pods
+    this.seedPods.forEach(pod => {
+      if (!pod.collected && pod.mesh.parent) {
+        // Floating motion
+        pod.mesh.position.y = 0.1 + Math.sin(Date.now() * 0.002 + pod.position.x) * 0.05;
+        pod.mesh.rotation.y += deltaTime * 0.5;
+      }
+    });
+    
     // Animate exit portal
     if (this.exitPortal) {
       // Rotate the entire portal slowly
@@ -567,6 +811,109 @@ export class PortalWorld {
     return { isNear: false };
   }
   
+  public collectSeedsFromPlant(position: THREE.Vector3): { collected: boolean; seedType?: string; seedCount?: number } {
+    // Find nearest uncollected wild plant
+    let nearestPlant: WildPlant | null = null;
+    let nearestDistance = Infinity;
+    
+    for (const plant of this.wildPlants) {
+      if (!plant.collected) {
+        const distance = position.distanceTo(plant.position);
+        if (distance < 2 && distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestPlant = plant;
+        }
+      }
+    }
+    
+    if (nearestPlant) {
+      nearestPlant.collected = true;
+      
+      // Remove the plant mesh
+      this.scene.remove(nearestPlant.mesh);
+      
+      // Dispose of geometries and materials
+      nearestPlant.mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          if (child.material instanceof THREE.Material) {
+            child.material.dispose();
+          }
+        }
+      });
+      
+      return { 
+        collected: true, 
+        seedType: nearestPlant.seedType,
+        seedCount: nearestPlant.seedCount 
+      };
+    }
+    
+    return { collected: false };
+  }
+  
+  public collectSeedPod(position: THREE.Vector3): { collected: boolean; seedType?: string; seedCount?: number } {
+    // Find nearest uncollected seed pod
+    let nearestPod: SeedPod | null = null;
+    let nearestDistance = Infinity;
+    
+    for (const pod of this.seedPods) {
+      if (!pod.collected) {
+        const distance = position.distanceTo(pod.position);
+        if (distance < 1.5 && distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestPod = pod;
+        }
+      }
+    }
+    
+    if (nearestPod) {
+      nearestPod.collected = true;
+      
+      // Remove the mesh
+      this.scene.remove(nearestPod.mesh);
+      
+      // Dispose of geometry and material
+      nearestPod.mesh.geometry.dispose();
+      if (nearestPod.mesh.material instanceof THREE.Material) {
+        nearestPod.mesh.material.dispose();
+      }
+      
+      // Remove associated glow light
+      const lights = this.scene.children.filter(
+        child => child instanceof THREE.PointLight && 
+        child.position.distanceTo(nearestPod.position) < 0.5
+      );
+      lights.forEach(light => this.scene.remove(light));
+      
+      return { 
+        collected: true, 
+        seedType: nearestPod.seedType,
+        seedCount: nearestPod.seedCount 
+      };
+    }
+    
+    return { collected: false };
+  }
+  
+  public isNearWildPlant(position: THREE.Vector3): boolean {
+    for (const plant of this.wildPlants) {
+      if (!plant.collected && position.distanceTo(plant.position) < 2) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
+  public isNearSeedPod(position: THREE.Vector3): boolean {
+    for (const pod of this.seedPods) {
+      if (!pod.collected && position.distanceTo(pod.position) < 1.5) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
   public getSoilNutrients() {
     const biomeMap: Record<BiomeType, keyof typeof BIOME_SOILS> = {
       'fertile_valley': 'FERTILE_VALLEY',
@@ -621,6 +968,28 @@ export class PortalWorld {
       this.scene.remove(source.particleSystem);
     }
     
+    // Clean up wild plants
+    for (const plant of this.wildPlants) {
+      plant.mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+          if (child.material instanceof THREE.Material) {
+            child.material.dispose();
+          }
+        }
+      });
+      this.scene.remove(plant.mesh);
+    }
+    
+    // Clean up seed pods
+    for (const pod of this.seedPods) {
+      pod.mesh.geometry.dispose();
+      if (pod.mesh.material instanceof THREE.Material) {
+        pod.mesh.material.dispose();
+      }
+      this.scene.remove(pod.mesh);
+    }
+    
     // Clean up exit portal
     if (this.exitPortal) {
       this.exitPortal.traverse((child) => {
@@ -651,6 +1020,9 @@ export class PortalWorld {
     this.terrainMeshes = [];
     this.decorationMeshes = [];
     this.soilDeposits = [];
+    this.waterSources = [];
+    this.wildPlants = [];
+    this.seedPods = [];
     
     // Remove fog
     this.scene.fog = null;

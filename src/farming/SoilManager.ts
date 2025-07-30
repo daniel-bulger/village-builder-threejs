@@ -298,8 +298,8 @@ export class SoilManager {
         const hitSoil = intersects[0].object !== this.scene.getObjectByName('ground-plane');
         
         if (hitSoil) {
-          // For place tool, go on top. For remove/water/barrier, stay at current level
-          if (input.currentTool === 'place') {
+          // For place tools (including place_soil), go on top. For remove/water/barrier, stay at current level
+          if (input.currentTool === 'place' || input.currentTool === 'place_soil') {
             this.targetY = actualHeight + 1;
           } else {
             // For remove/water/barrier tools, target the actual soil level
@@ -307,8 +307,13 @@ export class SoilManager {
           }
         } else {
           // Place at ground when pointing at ground
-          // For barriers, default to 0 but allow scrolling to -1
-          this.targetY = 0;
+          // For place_soil tool, always place one above existing soil in the column
+          if (input.currentTool === 'place_soil') {
+            this.targetY = actualHeight + 1;
+          } else {
+            // For barriers, default to 0 but allow scrolling to -1
+            this.targetY = 0;
+          }
         }
       }
       
@@ -396,7 +401,14 @@ export class SoilManager {
           let color = Constants.PREVIEW_INVALID_COLOR;
           
           if (input.currentTool === 'plant') {
-            canPlant = hexExists && this.plantSimulation.canPlantAt(worldPos, this.selectedPlantType);
+            // Get plant type from active seed item
+            const game = (window as any).game;
+            const activeItem = game?.unifiedInventorySystem?.getActiveItem();
+            let plantType = this.selectedPlantType;
+            if (activeItem && activeItem.type === 'seed' && activeItem.metadata?.plantType) {
+              plantType = activeItem.metadata.plantType;
+            }
+            canPlant = hexExists && this.plantSimulation.canPlantAt(worldPos, plantType);
             color = canPlant ? 0x00ff00 : Constants.PREVIEW_INVALID_COLOR; // Green for valid plant spot
           } else if (input.currentTool === 'organic') {
             // For organic plants, just check if there's soil
@@ -590,6 +602,11 @@ export class SoilManager {
       soil.mesh.material.color = nutrientColor;
       soil.mesh.material.needsUpdate = true;
     }
+    
+    // Move placement target up to the next layer
+    this.targetY = hexCoord.y + 1;
+    this.hoveredY = this.targetY;
+    this.hasScrolled = true; // Mark as manually adjusted to keep the new height
     
     return true;
   }
@@ -1041,8 +1058,17 @@ export class SoilManager {
       return false;
     }
     
+    // Get the plant type from the active seed item
+    const game = (window as any).game;
+    const activeItem = game?.unifiedInventorySystem?.getActiveItem();
+    let plantType = this.selectedPlantType; // Default
+    
+    if (activeItem && activeItem.type === 'seed' && activeItem.metadata?.plantType) {
+      plantType = activeItem.metadata.plantType;
+    }
+    
     // Check if there are enough nutrients for this plant type
-    if (!this.nutrientSystem.hasEnoughNutrients(hexCoord, this.selectedPlantType)) {
+    if (!this.nutrientSystem.hasEnoughNutrients(hexCoord, plantType)) {
       console.log('Cannot plant - insufficient nutrients in soil');
       return false;
     }
@@ -1053,33 +1079,39 @@ export class SoilManager {
     plantWorldPos.y = hexCoord.y * Constants.HEX_HEIGHT + Constants.HEX_HEIGHT;
     
     // Check if we're replanting an uprooted plant
-    const game = (window as any).game;
-    const activeItem = game?.inventorySystem?.getActiveItem();
+    // Note: activeItem might be from the old inventory system for uprooted plants
+    const uprootedItem = game?.inventorySystem?.getActiveItem();
     
-    if (activeItem && activeItem.type === 'plant' && activeItem.plantData) {
+    if (uprootedItem && uprootedItem.type === 'plant' && uprootedItem.plantData) {
       // Replant uprooted plant
-      if (!this.plantSimulation.canReplantAt(plantWorldPos, activeItem.plantData.typeId)) {
+      if (!this.plantSimulation.canReplantAt(plantWorldPos, uprootedItem.plantData.typeId)) {
         console.log('Cannot replant - space occupied');
         return false;
       }
       
-      const success = this.plantSimulation.replantUprooted(activeItem.plantData, plantWorldPos);
+      const success = this.plantSimulation.replantUprooted(uprootedItem.plantData, plantWorldPos);
       if (success) {
         // Remove from inventory
         game.inventorySystem.consumeActiveItem();
-        console.log(`Replanted ${activeItem.name}`);
+        console.log(`Replanted ${uprootedItem.name}`);
         return true;
       }
     } else {
       // Plant new seed
-      if (!this.plantSimulation.canPlantAt(plantWorldPos, this.selectedPlantType)) {
+      if (!this.plantSimulation.canPlantAt(plantWorldPos, plantType)) {
         console.log('Cannot plant - space occupied');
         return false;
       }
       
-      const plantId = this.plantSimulation.plantSeed(this.selectedPlantType, plantWorldPos);
+      const plantId = this.plantSimulation.plantSeed(plantType, plantWorldPos);
       if (plantId) {
-        console.log(`Planted ${this.selectedPlantType} at sub-hex position`);
+        console.log(`Planted ${plantType} at sub-hex position`);
+        
+        // Consume one seed from inventory
+        if (activeItem && activeItem.type === 'seed') {
+          game?.unifiedInventorySystem?.useActiveItem(1);
+        }
+        
         return true;
       }
     }
@@ -1432,6 +1464,11 @@ export class SoilManager {
       game.unifiedInventoryUI.update();
       // Update soil colors to reflect new nutrients
       this.updateSoilColors();
+      
+      // Move placement target up to the next layer
+      this.targetY = hexCoord.y + 1;
+      this.hoveredY = this.targetY;
+      this.hasScrolled = true; // Mark as manually adjusted to keep the new height
     }
   }
 }

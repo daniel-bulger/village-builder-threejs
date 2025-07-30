@@ -178,6 +178,68 @@ export class UnifiedInventorySystem {
   }
   
   /**
+   * Add seeds to the inventory
+   * @returns true if seeds were added
+   */
+  addSeeds(seedType: string, quantity: number): boolean {
+    // Map seed types to display names and icons
+    const seedInfo: Record<string, { name: string, icon: string }> = {
+      'tomato_seeds': { name: 'Tomato Seeds', icon: '🍅' },
+      'lettuce_seeds': { name: 'Lettuce Seeds', icon: '🥬' },
+      'carrot_seeds': { name: 'Carrot Seeds', icon: '🥕' },
+      'bean_seeds': { name: 'Bean Seeds', icon: '🫘' },
+      'mushroom_spores': { name: 'Mushroom Spores', icon: '🍄' },
+      'herb_seeds': { name: 'Herb Seeds', icon: '🌿' },
+      'pepper_seeds': { name: 'Pepper Seeds', icon: '🌶️' },
+      'eggplant_seeds': { name: 'Eggplant Seeds', icon: '🍆' },
+      'potato_seeds': { name: 'Potato Seeds', icon: '🥔' },
+      'crystal_seeds': { name: 'Crystal Flower Seeds', icon: '💎' },
+      'glowberry_seeds': { name: 'Glowberry Seeds', icon: '🫐' },
+      'moss_spores': { name: 'Cave Moss Spores', icon: '🌱' }
+    };
+    
+    const info = seedInfo[seedType] || { name: seedType, icon: '🌱' };
+    const plantType = seedType.replace('_seeds', '').replace('_spores', '');
+    
+    const seedItem: InventoryItem = {
+      id: seedType,
+      type: ItemType.SEED,
+      name: info.name,
+      icon: info.icon,
+      stackable: true,
+      maxStack: 99,
+      quantity: quantity,
+      metadata: { 
+        plantType: plantType,
+        biomeOrigin: this.getBiomeFromSeedType(seedType)
+      }
+    };
+    
+    const index = this.addItem(seedItem);
+    return index !== -1;
+  }
+  
+  private getBiomeFromSeedType(seedType: string): string {
+    // Map seeds to their origin biomes
+    const biomeMap: Record<string, string> = {
+      'tomato_seeds': 'fertile_valley',
+      'lettuce_seeds': 'fertile_valley',
+      'carrot_seeds': 'fertile_valley',
+      'bean_seeds': 'ancient_forest',
+      'mushroom_spores': 'ancient_forest',
+      'herb_seeds': 'ancient_forest',
+      'pepper_seeds': 'volcanic_ash',
+      'eggplant_seeds': 'volcanic_ash',
+      'potato_seeds': 'volcanic_ash',
+      'crystal_seeds': 'crystal_caves',
+      'glowberry_seeds': 'crystal_caves',
+      'moss_spores': 'crystal_caves'
+    };
+    
+    return biomeMap[seedType] || 'unknown';
+  }
+  
+  /**
    * Remove item from inventory slot
    */
   removeItem(inventoryIndex: number, quantity: number = 1): InventoryItem | null {
