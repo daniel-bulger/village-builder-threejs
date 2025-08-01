@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { HexUtils, HexCoord, HexCoord3D } from '../utils/HexUtils';
-import { SubHexUtils } from '../utils/SubHexUtils';
+import { SubHexUtils, SubHexCoord3D } from '../utils/SubHexUtils';
 import { Constants } from '../utils/Constants';
 import { InputState } from '../game/InputManager';
 import { WaterSimulation, SoilType } from './WaterSimulation';
@@ -14,6 +14,7 @@ import { OrganicPlantInspectorUI } from '../ui/OrganicPlantInspectorUI';
 import { ORGANIC_TOMATO } from './OrganicGrowthSystem';
 import { NutrientSystem } from './NutrientSystem';
 import { SoilInspectorUI } from '../ui/SoilInspectorUI';
+import { ItemType } from '../inventory/InventorySystem';
 
 class SoilHex {
   public readonly mesh: THREE.Mesh;
@@ -95,6 +96,38 @@ export class SoilManager {
     this.plantInspectorUI = new PlantInspectorUI();
     this.organicPlantInspectorUI = new OrganicPlantInspectorUI();
     this.soilInspectorUI = new SoilInspectorUI();
+    
+    // Set up plant inspector callbacks
+    this.plantInspectorUI.setUprootCallback((plantId) => {
+      console.log(`Attempting to uproot plant ${plantId}`);
+      
+      // Directly uproot using the plant ID
+      const uprootedData = this.plantSimulation.uprootPlant(plantId);
+      if (uprootedData) {
+        // Get the inventory system from the parent game
+        const game = (window as any).game;
+        if (game && game.inventorySystem) {
+          const success = game.inventorySystem.addUprootedPlant(uprootedData);
+          if (success) {
+            console.log(`Uprooted ${uprootedData.typeName} and added to inventory`);
+          } else {
+            console.log('Failed to add uprooted plant to inventory - no empty slots');
+          }
+        }
+      } else {
+        console.error(`Failed to uproot plant ${plantId}`);
+      }
+    });
+    
+    this.plantInspectorUI.setHarvestCallback((plantId) => {
+      const plant = this.plantSimulation.getAllPlants().find(p => p.id === plantId);
+      if (plant) {
+        const harvestYield = this.plantSimulation.harvestPlant(plantId);
+        if (harvestYield > 0) {
+          console.log(`Harvested ${harvestYield} items from inspector`);
+        }
+      }
+    });
     
     // Register organic plant types
     this.organicPlantSimulation.registerPlantType(ORGANIC_TOMATO);
@@ -181,7 +214,19 @@ export class SoilManager {
       // Always update inspector to catch different plants in same hex
       this.updateInspector(hex3D, this.hoveredWorldPos, input.mousePosition);
     } else {
-      if (this.inspectedPlantId !== null || this.lastInspectedHex !== null) {
+      // Check if mouse is over the inspector UI before hiding
+      const mouseX = (input.mousePosition.x + 1) * 0.5 * window.innerWidth;
+      const mouseY = (-input.mousePosition.y + 1) * 0.5 * window.innerHeight;
+      
+      // Check if mouse is over any of the inspector UIs or if plant inspector is pinned
+      const mouseOverInspector = this.plantInspectorUI.isMouseOver(mouseX, mouseY) ||
+                               (this.organicPlantInspectorUI as any).isMouseOver?.(mouseX, mouseY) ||
+                               (this.soilInspectorUI as any).isMouseOver?.(mouseX, mouseY);
+      
+      const plantInspectorPinned = this.plantInspectorUI.isPinnedOpen();
+      
+      // Only hide if not hovering over the inspector and not pinned
+      if (!mouseOverInspector && !plantInspectorPinned && (this.inspectedPlantId !== null || this.lastInspectedHex !== null)) {
         this.plantInspectorUI.hide();
         this.organicPlantInspectorUI.hide();
         this.soilInspectorUI.hide();
@@ -382,7 +427,15 @@ export class SoilManager {
         if (this.edgePreview) {
           this.edgePreview.visible = false;
         }
+      } else if (input.currentTool === 'none') {
+        // No tool selected - hide all previews
+        this.placementPreview.visible = false;
+        this.subHexPreview.visible = false;
+        if (this.edgePreview) {
+          this.edgePreview.visible = false;
+        }
       } else {
+        // Other tools show hex preview
         this.placementPreview.visible = true;
         this.subHexPreview.visible = false;
         if (this.edgePreview) {
@@ -1079,21 +1132,19 @@ export class SoilManager {
     plantWorldPos.y = hexCoord.y * Constants.HEX_HEIGHT + Constants.HEX_HEIGHT;
     
     // Check if we're replanting an uprooted plant
-    // Note: activeItem might be from the old inventory system for uprooted plants
-    const uprootedItem = game?.inventorySystem?.getActiveItem();
-    
-    if (uprootedItem && uprootedItem.type === 'plant' && uprootedItem.plantData) {
+    if (activeItem && activeItem.type === ItemType.PLANT && activeItem.metadata?.plantState) {
       // Replant uprooted plant
-      if (!this.plantSimulation.canReplantAt(plantWorldPos, uprootedItem.plantData.typeId)) {
+      const plantData = activeItem.metadata.plantState;
+      if (!this.plantSimulation.canPlantAt(plantWorldPos, plantData.typeId)) {
         console.log('Cannot replant - space occupied');
         return false;
       }
       
-      const success = this.plantSimulation.replantUprooted(uprootedItem.plantData, plantWorldPos);
+      const success = this.plantSimulation.replantPlant(plantData, plantWorldPos);
       if (success) {
         // Remove from inventory
-        game.inventorySystem.consumeActiveItem();
-        console.log(`Replanted ${uprootedItem.name}`);
+        game.unifiedInventorySystem.consumeActiveItem();
+        console.log(`Replanted ${activeItem.name}`);
         return true;
       }
     } else {
@@ -1145,15 +1196,32 @@ export class SoilManager {
   private uprootPlant(hexCoord: HexCoord3D, worldPos: THREE.Vector3): boolean {
     // Use the actual world position for sub-hex precision
     const uprootWorldPos = worldPos.clone();
-    // Set y to the TOP of the soil hex where plants are positioned
-    uprootWorldPos.y = hexCoord.y * Constants.HEX_HEIGHT + Constants.HEX_HEIGHT;
-    
-    const plant = this.plantSimulation.getPlantAt(uprootWorldPos);
-    if (!plant) {
-      console.log('No plant to uproot here');
-      return false;
+    // Only adjust y if it seems incorrect (for backward compatibility)
+    if (Math.abs(uprootWorldPos.y - hexCoord.y * Constants.HEX_HEIGHT) < 0.01) {
+      // Set y to the TOP of the soil hex where plants are positioned
+      uprootWorldPos.y = hexCoord.y * Constants.HEX_HEIGHT + Constants.HEX_HEIGHT;
     }
     
+    console.log('Looking for plant at position:', uprootWorldPos);
+    const plant = this.plantSimulation.getPlantAt(uprootWorldPos);
+    if (!plant) {
+      console.log('No plant to uproot at position:', uprootWorldPos);
+      // Try with adjusted Y as fallback
+      uprootWorldPos.y = hexCoord.y * Constants.HEX_HEIGHT + Constants.HEX_HEIGHT;
+      const plantRetry = this.plantSimulation.getPlantAt(uprootWorldPos);
+      if (!plantRetry) {
+        console.log('No plant found even with adjusted Y:', uprootWorldPos);
+        return false;
+      }
+      // Found with adjusted Y
+      console.log('Found plant with adjusted Y');
+      return this.performUproot(plantRetry);
+    }
+    
+    return this.performUproot(plant);
+  }
+  
+  private performUproot(plant: any): boolean {
     const uprootedData = this.plantSimulation.uprootPlant(plant.id);
     if (uprootedData) {
       // Get the inventory system from the parent game
@@ -1214,38 +1282,59 @@ export class SoilManager {
     
     if (plant) {
       // Show inspector for regular plant (always update content)
+      const plantType = PLANT_TYPES.get(plant.typeId);
+      if (plantType) {
+        if (this.inspectedPlantId === plant.id) {
+          // Same plant - update position and content
+          this.plantInspectorUI.updatePosition(screenX, screenY);
+          // Always update content to reflect current state
+          this.plantInspectorUI.show(plant, plantType, screenX, screenY);
+        } else {
+          // New plant - show inspector
+          this.plantInspectorUI.show(plant, plantType, screenX, screenY);
+          // Only hide other inspectors if plant inspector is not pinned
+          if (!this.plantInspectorUI.isPinnedOpen()) {
+            this.organicPlantInspectorUI.hide();
+            this.soilInspectorUI.hide();
+          }
+        }
+      }
       this.inspectedPlantId = plant.id;
       this.inspectedPlantType = 'regular';
       this.lastInspectedHex = null; // Clear soil inspection state
-      const plantType = PLANT_TYPES.get(plant.typeId);
-      if (plantType) {
-        this.plantInspectorUI.show(plant, plantType, screenX, screenY);
-        this.organicPlantInspectorUI.hide();
-        this.soilInspectorUI.hide();
-      }
     } else {
       // Check organic plants
       const organicPlant = this.organicPlantSimulation.getPlantAt(this.tempInspectorPos);
       
       if (organicPlant) {
         // Show inspector for organic plant (always update content)
+        const plantType = this.organicPlantSimulation.getPlantType(organicPlant.typeId);
+        if (plantType) {
+          if (this.inspectedPlantId === organicPlant.id) {
+            // Same plant - just update position if we have the method
+            if ((this.organicPlantInspectorUI as any).updatePosition) {
+              (this.organicPlantInspectorUI as any).updatePosition(screenX, screenY);
+            }
+          } else {
+            // New plant - show inspector
+            this.organicPlantInspectorUI.show(organicPlant, plantType, screenX, screenY);
+            this.plantInspectorUI.hide();
+            this.soilInspectorUI.hide();
+          }
+        }
         this.inspectedPlantId = organicPlant.id;
         this.inspectedPlantType = 'organic';
         this.lastInspectedHex = null; // Clear soil inspection state
-        const plantType = this.organicPlantSimulation.getPlantType(organicPlant.typeId);
-        if (plantType) {
-          this.organicPlantInspectorUI.show(organicPlant, plantType, screenX, screenY);
-          this.plantInspectorUI.hide();
-          this.soilInspectorUI.hide();
-        }
       } else {
         // No plant found - clear plant inspection state first
         this.inspectedPlantId = null;
         this.inspectedPlantType = null;
         
-        // Hide plant inspectors
-        this.plantInspectorUI.hide();
-        this.organicPlantInspectorUI.hide();
+        // Hide plant inspectors (but respect pinned state)
+        if (!this.plantInspectorUI.isPinnedOpen()) {
+          this.plantInspectorUI.hide();
+          this.organicPlantInspectorUI.hide();
+        }
         
         // Now handle soil inspection
         const hex3DKey = HexUtils.hex3DToKey(hexCoord);

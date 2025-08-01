@@ -11,6 +11,7 @@ export class Portal {
   private readonly config: PortalConfig;
   private timeRemaining: number;
   private isActive: boolean = true;
+  private readonly id: string;
   
   // Visual components
   private frameMesh: THREE.Mesh;
@@ -21,9 +22,13 @@ export class Portal {
   // Animation state
   private animationTime: number = 0;
   
+  // Static counter for unique IDs
+  private static nextId: number = 1;
+  
   constructor(config: PortalConfig) {
     this.config = config;
     this.timeRemaining = config.duration;
+    this.id = `portal_${Portal.nextId++}_${config.biomeType}`;
     this.mesh = new THREE.Group();
     this.mesh.position.copy(config.position);
     
@@ -216,6 +221,10 @@ export class Portal {
   
   getPosition(): THREE.Vector3 {
     return this.mesh.position.clone();
+  }
+  
+  getId(): string {
+    return this.id;
   }
   
   dispose(): void {

@@ -298,6 +298,25 @@ export class UnifiedInventorySystem {
   }
   
   /**
+   * Consume one unit of the active item
+   */
+  consumeActiveItem(): boolean {
+    const slot = this.inventory[this.activeHotbarSlot];
+    if (!slot || !slot.item) return false;
+    
+    // Decrease quantity
+    slot.quantity--;
+    
+    // If quantity reaches 0, remove the item
+    if (slot.quantity <= 0) {
+      slot.item = null;
+      slot.quantity = 0;
+    }
+    
+    return true;
+  }
+  
+  /**
    * Use one of the active item (for placing soil, etc)
    */
   useActiveItem(quantity: number = 1): boolean {

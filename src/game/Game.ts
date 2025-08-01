@@ -15,6 +15,8 @@ import { SoilItem, BIOME_SOILS } from '../items/SoilItem';
 import { PortalWorld, BiomeType } from '../world/PortalWorld';
 import { PortalManager } from '../world/PortalManager';
 import { ItemType } from '../inventory/InventorySystem';
+import { VillagerManager } from '../villagers/VillagerManager';
+import { VillagerUI } from '../ui/VillagerUI';
 
 export class Game {
   // Core
@@ -52,6 +54,11 @@ export class Game {
   public timeScale = 1;
   private isInPortalWorld = false;
   private portalWorld: PortalWorld | null = null;
+  private portalWorldCache: Map<string, PortalWorld> = new Map();
+  
+  // Villagers
+  public readonly villagerManager: VillagerManager;
+  private villagerUI: VillagerUI;
   
   constructor(scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer) {
     this.scene = scene;
@@ -76,6 +83,10 @@ export class Game {
     // Initialize farming
     this.hexGrid = new HexGrid(scene);
     this.soilManager = new SoilManager(scene);
+    
+    // Initialize villagers
+    this.villagerManager = new VillagerManager(scene);
+    this.villagerUI = new VillagerUI(this.villagerManager);
     
     // Initialize inventory system
     this.unifiedInventorySystem = new UnifiedInventorySystem();
@@ -182,39 +193,41 @@ export class Game {
       }
       
       // Check proximity for UI hints
-      if (this.portalWorld.isNearSoilDeposit(this.player.position)) {
+      if (this.portalWorld && this.portalWorld.isNearSoilDeposit(this.player.position)) {
         console.log('[E] to collect soil');
-      } else if (this.portalWorld.isNearWildPlant(this.player.position)) {
+      } else if (this.portalWorld && this.portalWorld.isNearWildPlant(this.player.position)) {
         console.log('[E] to collect seeds from plant');
-      } else if (this.portalWorld.isNearSeedPod(this.player.position)) {
+      } else if (this.portalWorld && this.portalWorld.isNearSeedPod(this.player.position)) {
         console.log('[E] to pick up seed pod');
       }
       
       // Check if near water source
-      const waterCheck = this.portalWorld.isNearWaterSource(this.player.position);
-      if (waterCheck.isNear) {
-        const activeItem = this.unifiedInventorySystem.getActiveItem();
-        const isWateringCan = activeItem && activeItem.id === 'watering_can';
-        
-        if (isWateringCan) {
-          const currentWater = activeItem.metadata?.waterAmount || 0;
-          const maxCapacity = activeItem.metadata?.maxCapacity || 100000;
+      if (this.portalWorld) {
+        const waterCheck = this.portalWorld.isNearWaterSource(this.player.position);
+        if (waterCheck.isNear) {
+          const activeItem = this.unifiedInventorySystem.getActiveItem();
+          const isWateringCan = activeItem && activeItem.id === 'watering_can';
           
-          // Show hint if can be refilled
-          if (currentWater < maxCapacity) {
-            console.log('[Right-click] to refill watering can');
+          if (isWateringCan) {
+            const currentWater = activeItem.metadata?.waterAmount || 0;
+            const maxCapacity = activeItem.metadata?.maxCapacity || 100000;
             
-            // Handle refill on right click
-            if (inputState.mouseRight) {
-              activeItem.metadata.waterAmount = maxCapacity;
-              console.log('Watering can refilled to maximum capacity!');
-              this.unifiedInventoryUI.update();
+            // Show hint if can be refilled
+            if (currentWater < maxCapacity) {
+              console.log('[Right-click] to refill watering can');
+              
+              // Handle refill on right click
+              if (inputState.mouseRight) {
+                activeItem.metadata.waterAmount = maxCapacity;
+                console.log('Watering can refilled to maximum capacity!');
+                this.unifiedInventoryUI.update();
+              }
+            } else if (inputState.mouseRight) {
+              console.log('Watering can is already full.');
             }
           } else if (inputState.mouseRight) {
-            console.log('Watering can is already full.');
+            console.log('Equip watering can to collect water.');
           }
-        } else if (inputState.mouseRight) {
-          console.log('Equip watering can to collect water.');
         }
       }
     } else {
@@ -268,6 +281,15 @@ export class Game {
       this.soilManager.setTimeOfDay(timeOfDay);
       this.soilManager.tickWater(deltaTime, timeOfDay);
       perfEnd('water', waterStart);
+    }
+    
+    // Update villagers
+    if (!this.isInPortalWorld) {
+      const villagerStart = perfStart('villagers');
+      const timeOfDay = this.lighting.getTimeOfDay();
+      this.villagerManager.update(deltaTime, timeOfDay);
+      this.villagerUI.update();
+      perfEnd('villagers', villagerStart);
     }
     
     // Update UI
@@ -493,7 +515,7 @@ export class Game {
       return itemToTool[activeItem.id] || 'place';
     }
     
-    return 'place'; // Default tool
+    return 'none'; // No tool when slot is empty
   }
   
   private enterPortal(): void {
@@ -501,10 +523,22 @@ export class Game {
     if (!portal) return;
     
     const biomeType = portal.getBiomeType() as BiomeType;
-    console.log(`Entering ${biomeType} portal...`);
+    const portalId = portal.getId(); // Unique ID for this specific portal
+    console.log(`Entering ${biomeType} portal (${portalId})...`);
     
-    // Create portal world with its own scene
-    this.portalWorld = new PortalWorld(biomeType);
+    // Check if we already have this portal world cached
+    let cachedWorld = this.portalWorldCache.get(portalId);
+    
+    if (!cachedWorld) {
+      // Create new portal world and cache it
+      console.log(`Creating new portal world for ${portalId}`);
+      cachedWorld = new PortalWorld(biomeType);
+      this.portalWorldCache.set(portalId, cachedWorld);
+    } else {
+      console.log(`Using cached portal world for ${portalId}`);
+    }
+    
+    this.portalWorld = cachedWorld;
     this.isInPortalWorld = true;
     
     // Move player to portal world spawn point
@@ -543,8 +577,8 @@ export class Game {
       this.player.position.set(0, 1, 0);
     }
     
-    // Clean up portal world
-    this.portalWorld.dispose();
+    // Don't dispose the portal world - keep it cached
+    // Just clear the reference
     this.portalWorld = null;
     this.isInPortalWorld = false;
   }

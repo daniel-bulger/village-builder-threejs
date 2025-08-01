@@ -8,6 +8,13 @@ export class PlantInspectorUI {
   private lastUpdateTime: number = 0;
   private cachedWidth: number = 0;
   private cachedHeight: number = 0;
+  private currentPlant: PlantState | null = null;
+  private onUprootCallback: ((plantId: string) => void) | null = null;
+  private onHarvestCallback: ((plantId: string) => void) | null = null;
+  private isPinned: boolean = false;
+  private pinTimer: number | null = null;
+  private hoverStartTime: number = 0;
+  private PIN_DELAY: number = 2000; // 2 seconds to auto-pin
   
   constructor() {
     this.container = document.createElement('div');
@@ -21,7 +28,7 @@ export class PlantInspectorUI {
       color: white;
       font-family: monospace;
       font-size: 12px;
-      pointer-events: none;
+      pointer-events: auto;
       z-index: 1000;
       min-width: 200px;
       display: none;
@@ -33,9 +40,28 @@ export class PlantInspectorUI {
     this.currentTimeOfDay = timeOfDay;
   }
   
+  setUprootCallback(callback: (plantId: string) => void): void {
+    this.onUprootCallback = callback;
+  }
+  
+  setHarvestCallback(callback: (plantId: string) => void): void {
+    this.onHarvestCallback = callback;
+  }
+  
   show(plant: PlantState, plantType: PlantType, mouseX: number, mouseY: number): void {
+    const wasHidden = !this.visible;
+    const isNewPlant = plant.id !== this.lastPlantId;
+    
     this.visible = true;
     this.container.style.display = 'block';
+    this.currentPlant = plant;
+    
+    // Reset pin timer if we're showing after being hidden or it's a new plant
+    if (wasHidden || isNewPlant) {
+      this.isPinned = false;
+      this.hoverStartTime = Date.now();
+      this.startPinTimer();
+    }
     
     // Update content - remove caching to ensure live updates
     this.updateContent(plant, plantType);
@@ -47,45 +73,94 @@ export class PlantInspectorUI {
     this.cachedWidth = rect.width;
     this.cachedHeight = rect.height;
     
-    // Position near mouse but keep on screen
-    const padding = 20;
-    let left = mouseX + padding;
-    let top = mouseY + padding;
-    
-    // Adjust if would go off screen using cached dimensions
-    if (this.cachedWidth > 0 && this.cachedHeight > 0) {
-      if (left + this.cachedWidth > window.innerWidth) {
-        left = mouseX - this.cachedWidth - padding;
+    // Only update position if not pinned
+    if (!this.isPinned) {
+      // Position near mouse but keep on screen
+      const padding = 20;
+      let left = mouseX + padding;
+      let top = mouseY - this.cachedHeight - padding; // Position above cursor instead
+      
+      // Adjust if would go off screen using cached dimensions
+      if (this.cachedWidth > 0 && this.cachedHeight > 0) {
+        if (left + this.cachedWidth > window.innerWidth) {
+          left = mouseX - this.cachedWidth - padding;
+        }
+        if (top < 0) {
+          top = mouseY + padding; // Fall back to below cursor if no room above
+        }
       }
-      if (top + this.cachedHeight > window.innerHeight) {
-        top = mouseY - this.cachedHeight - padding;
-      }
+      
+      this.container.style.left = `${left}px`;
+      this.container.style.top = `${top}px`;
     }
-    
-    this.container.style.left = `${left}px`;
-    this.container.style.top = `${top}px`;
   }
   
   hide(): void {
+    // Don't hide if pinned
+    if (this.isPinned) return;
+    
     this.visible = false;
     this.container.style.display = 'none';
+    this.clearPinTimer();
+  }
+  
+  forceHide(): void {
+    this.visible = false;
+    this.container.style.display = 'none';
+    this.isPinned = false;
+    this.clearPinTimer();
+  }
+  
+  isMouseOver(mouseX: number, mouseY: number): boolean {
+    if (!this.visible) return false;
+    const rect = this.container.getBoundingClientRect();
+    return mouseX >= rect.left && mouseX <= rect.right && 
+           mouseY >= rect.top && mouseY <= rect.bottom;
+  }
+  
+  isPinnedOpen(): boolean {
+    return this.isPinned;
+  }
+  
+  private startPinTimer(): void {
+    this.clearPinTimer();
+    this.pinTimer = window.setTimeout(() => {
+      this.isPinned = true;
+      // Update UI to show pinned state
+      if (this.currentPlant && this.visible) {
+        const plantType = (window as any).PLANT_TYPES?.get(this.currentPlant.typeId);
+        if (plantType) {
+          this.updateContent(this.currentPlant, plantType);
+        }
+      }
+    }, this.PIN_DELAY);
+  }
+  
+  private clearPinTimer(): void {
+    if (this.pinTimer !== null) {
+      window.clearTimeout(this.pinTimer);
+      this.pinTimer = null;
+    }
   }
   
   updatePosition(mouseX: number, mouseY: number): void {
     if (!this.visible) return;
     
+    // Don't update position if mouse is over the inspector (to keep it stable)
+    if (this.isMouseOver(mouseX, mouseY)) return;
+    
     // Position near mouse but keep on screen
     const padding = 20;
     let left = mouseX + padding;
-    let top = mouseY + padding;
+    let top = mouseY - this.cachedHeight - padding; // Position above cursor
     
     // Adjust if would go off screen using cached dimensions
     if (this.cachedWidth > 0 && this.cachedHeight > 0) {
       if (left + this.cachedWidth > window.innerWidth) {
         left = mouseX - this.cachedWidth - padding;
       }
-      if (top + this.cachedHeight > window.innerHeight) {
-        top = mouseY - this.cachedHeight - padding;
+      if (top < 0) {
+        top = mouseY + padding; // Fall back to below cursor if no room above
       }
     }
     
@@ -209,12 +284,34 @@ export class PlantInspectorUI {
     }
     
     this.container.innerHTML = `
-      <div style="text-align: center; margin-bottom: 8px;">
+      ${this.isPinned ? `
+        <button style="
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          background: #664400;
+          border: 1px solid #886600;
+          color: #ffaa00;
+          width: 24px;
+          height: 24px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-family: monospace;
+          font-size: 16px;
+          line-height: 1;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">×</button>
+      ` : ''}
+      <div style="text-align: center; margin-bottom: 8px; ${this.isPinned ? 'margin-top: 8px;' : ''}">
         <strong style="color: #66ff66;">${plantType.name}</strong>
         <br>
         <span style="color: #aaa;">Stage: ${stage.name}</span>
         ${stage.duration > 0 ? `<br><span style="color: ${progressColor};">Progress: ${progress}%</span>` : ''}
         <br><span style="color: ${growthColor}; font-size: 11px;">Status: ${growthStatus}</span>
+        ${this.isPinned ? '<br><span style="color: #ffaa00; font-size: 10px;">📌 Pinned</span>' : ''}
       </div>
       
       <div style="border-top: 1px solid #444; padding-top: 8px;">
@@ -238,7 +335,77 @@ export class PlantInspectorUI {
       
       ${harvestInfo}
       ${stuntedInfo}
+      
+      <div style="margin-top: 12px; border-top: 1px solid #444; padding-top: 12px; display: flex; gap: 8px;">
+        <button id="uproot-btn" style="
+          flex: 1;
+          background: #664400;
+          border: 1px solid #886600;
+          color: #ffaa00;
+          padding: 6px 12px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-family: monospace;
+          font-size: 12px;
+          transition: all 0.2s;
+        " onmouseover="this.style.background='#885500'" onmouseout="this.style.background='#664400'">
+          🌱 Uproot
+        </button>
+        ${isHarvestable ? `
+          <button id="harvest-btn" style="
+            flex: 1;
+            background: #004400;
+            border: 1px solid #006600;
+            color: #66ff66;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 12px;
+            transition: all 0.2s;
+          " onmouseover="this.style.background='#005500'" onmouseout="this.style.background='#004400'">
+            🌾 Harvest
+          </button>
+        ` : ''}
+      </div>
     `;
+    
+    // Add event listeners after updating content
+    setTimeout(() => {
+      const uprootBtn = document.getElementById('uproot-btn');
+      const harvestBtn = document.getElementById('harvest-btn');
+      const closeBtn = this.container.querySelector('button');
+      
+      if (closeBtn && this.isPinned) {
+        closeBtn.onclick = (e) => {
+          e.stopPropagation();
+          this.forceHide();
+        };
+      }
+      
+      if (uprootBtn) {
+        uprootBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (this.onUprootCallback && this.currentPlant) {
+            this.onUprootCallback(this.currentPlant.id);
+            this.forceHide(); // Force hide even if pinned
+          }
+        };
+      }
+      
+      if (harvestBtn) {
+        harvestBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (this.onHarvestCallback && this.currentPlant) {
+            this.onHarvestCallback(this.currentPlant.id);
+            // Don't hide for continuous harvest plants unless single harvest
+            if (plantType.harvestBehavior.type === 'single') {
+              this.forceHide(); // Force hide even if pinned
+            }
+          }
+        };
+      }
+    }, 0);
   }
   
   dispose(): void {
