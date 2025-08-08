@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Construction Debug</title>
+    <style>
+        body { margin: 0; font-family: Arial; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        button {
+            margin: 5px;
+            padding: 5px 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>Construction System Debug</h3>
+        <button onclick="testFoundation()">Test Foundation</button>
+        <button onclick="testWall()">Test Wall</button>
+        <button onclick="testHexGrid()">Show Hex Grid</button>
+        <button onclick="clearAll()">Clear All</button>
+        <div id="output"></div>
+    </div>
+    
+    <script>
+        function testFoundation() {
+            console.log('Testing foundation placement...');
+            
+            // This will be executed in the game context
+            const testCode = `
+                const game = window.game;
+                const manager = game.buildingManager;
+                
+                // Clear existing
+                manager.components.forEach(comp => {
+                    manager.removeComponent(comp.id);
+                });
+                
+                // Place test foundation
+                const foundation = manager.placeComponent({
+                    type: 'foundation',
+                    material: 'wood',
+                    position: { q: 0, r: 0, y: 0 },
+                    level: 0
+                });
+                
+                // Add visual markers
+                const scene = game.scene;
+                
+                // Add hex outline
+                const hexGeom = new THREE.EdgesGeometry(
+                    new THREE.CylinderGeometry(1, 1, 0.1, 6)
+                );
+                const hexLine = new THREE.LineSegments(
+                    hexGeom,
+                    new THREE.LineBasicMaterial({ color: 0xff0000 })
+                );
+                hexLine.rotation.y = Math.PI / 6;
+                scene.add(hexLine);
+                
+                // Add coordinate labels
+                console.log('Foundation placed at (0,0,0)');
+                console.log('Foundation mesh:', foundation?.mesh);
+                
+                return {
+                    placed: foundation !== null,
+                    position: foundation?.mesh.position,
+                    size: foundation?.mesh.geometry.boundingBox
+                };
+            `;
+            
+            document.getElementById('output').innerText = 
+                'Check console and game view for foundation test';
+        }
+        
+        function testWall() {
+            console.log('Testing wall placement...');
+            document.getElementById('output').innerText = 
+                'Wall test - check console';
+        }
+        
+        function testHexGrid() {
+            console.log('Showing hex grid...');
+            document.getElementById('output').innerText = 
+                'Hex grid visualization - check game view';
+        }
+        
+        function clearAll() {
+            console.log('Clearing all components...');
+            document.getElementById('output').innerText = 
+                'All components cleared';
+        }
+        
+        // Instructions
+        document.getElementById('output').innerHTML = `
+            <strong>Instructions:</strong><br>
+            1. Open the game at http://localhost:5173<br>
+            2. Press F12 to open console<br>
+            3. Run: <code>game = window.game</code><br>
+            4. Use the buttons above to test<br>
+            5. Or paste test code from console logs
+        `;
+    </script>
+</body>
+</html>

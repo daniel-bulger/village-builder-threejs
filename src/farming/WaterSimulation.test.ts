@@ -103,7 +103,6 @@ describe('WaterSimulation', () => {
       const bottomWater = simulation.getSaturation(bottom);
       const totalWater = topWater + middleWater + bottomWater;
       
-      console.log(`Gravity test - Top: ${topWater.toFixed(3)}, Middle: ${middleWater.toFixed(3)}, Bottom: ${bottomWater.toFixed(3)}, Total: ${totalWater.toFixed(3)}`);
       
       // Water distributes through the column with slight preference for lower levels
       // The distribution shows capillary action counteracts some gravity
@@ -154,7 +153,6 @@ describe('WaterSimulation', () => {
       simulation.addEdgeBarrier(hex1, below);
       
       // Verify barriers were added
-      console.log('Barriers added:', simulation.getAllEdgeBarriers());
       
       // Add water to hex1
       simulation.addWater(hex1, 0.5);
@@ -172,11 +170,6 @@ describe('WaterSimulation', () => {
         }
       }
       
-      console.log('Water levels over time:', waterLevels);
-      console.log('All hexes:', simulation.getAllHexes().map(h => ({
-        coord: h.coord,
-        saturation: h.saturation
-      })));
       
       // Water should not flow to hex2
       expect(simulation.getSaturation(hex1)).toBeGreaterThan(0.4); // Some loss to evaporation
@@ -257,7 +250,6 @@ describe('WaterSimulation', () => {
       }
       
       const finalWater = simulation.getSaturation(center);
-      console.log(`Water retention test: ${initialWater} -> ${finalWater}`);
       
       // Water should be retained with only minor evaporation loss
       // (no drainage upward to air)
@@ -284,7 +276,6 @@ describe('WaterSimulation', () => {
       
       const finalWater = simulation.getSaturation(platform);
       
-      console.log(`Not oversaturated test - Initial platform: ${initialWater}, Final platform: ${finalWater}`);
       
       // Water should NOT drain horizontally since it's not oversaturated
       // Only minor evaporation loss
@@ -423,7 +414,6 @@ describe('WaterSimulation', () => {
       const topWater = simulation.getSaturation(top);
       const bottomWater = simulation.getSaturation(bottom);
       
-      console.log(`2-tall stack water: Initial top: ${initialWater}, Final top: ${topWater}, Bottom: ${bottomWater}`);
       
       // Water should distribute between the two hexes but not drain away
       const totalWater = topWater + bottomWater;
@@ -469,14 +459,12 @@ describe('WaterSimulation', () => {
         simulation.tick(1/60);
         if (i === 10) {
           const earlyWater = simulation.getSaturation(top);
-          console.log(`After 10 ticks: ${earlyWater} (from ${initialWater})`);
         }
       }
       
       const finalTopWater = simulation.getSaturation(top);
       const finalBottomWater = simulation.getSaturation(bottom);
       
-      console.log(`Oversaturated 2-tall: Initial: ${initialWater}, Final top: ${finalTopWater}, Bottom: ${finalBottomWater}`);
       
       // Oversaturated water should drain excess horizontally and some downward
       // Combined with vertical flow, top hex will lose significant water
@@ -503,7 +491,6 @@ describe('WaterSimulation', () => {
       }
       
       const finalWater = simulation.getSaturation(soil);
-      console.log(`Ground level hex with bottom barrier: Started with 0.5, ended with ${finalWater}`);
       
       // Water should be retained (only minor evaporation)
       expect(finalWater).toBeGreaterThan(0.495); // Almost all water retained
@@ -524,7 +511,6 @@ describe('WaterSimulation', () => {
       }
       
       const finalWater = simulation.getSaturation(soil);
-      console.log(`Ground level drainage to desert: Started with 0.5, ended with ${finalWater}`);
       
       // Water should drain downward into desert
       expect(finalWater).toBeLessThan(0.3); // Significant drainage
@@ -549,7 +535,6 @@ describe('WaterSimulation', () => {
       const topWater = simulation.getSaturation(top);
       const bottomWater = simulation.getSaturation(bottom);
       
-      console.log(`Gravity drainage: Top: ${topWater}, Bottom: ${bottomWater}`);
       
       // Water should flow down due to gravity
       expect(topWater).toBeLessThan(0.5);
@@ -578,7 +563,6 @@ describe('WaterSimulation', () => {
       
       const finalWater = simulation.getSaturation(hex);
       
-      console.log(`Oversaturated drainage - Initial: ${initialWater}, Final: ${finalWater}`);
       
       // Oversaturated water should drain to around capacity
       expect(finalWater).toBeLessThanOrEqual(0.65); // Should be close to capacity

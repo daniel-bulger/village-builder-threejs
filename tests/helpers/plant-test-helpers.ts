@@ -12,6 +12,9 @@ export interface PlantTestHelpers {
   
   // Mock Math.random for predictable randomization
   mockRandomForPlants(value: number = 0.5): () => void;
+  
+  // Enable deterministic mode for consistent test results
+  enableDeterministicMode(game: any, seed?: number): void;
 }
 
 export const plantTestHelpers: PlantTestHelpers = {
@@ -91,5 +94,21 @@ export const plantTestHelpers: PlantTestHelpers = {
     return () => {
       Math.random = originalRandom;
     };
+  },
+  
+  enableDeterministicMode(game: any, seed: number = 12345): void {
+    // Access the plant config if it exists on the game instance
+    const gameWindow = window as any;
+    
+    // Try to find plantConfig through various paths
+    if (gameWindow.plantConfig) {
+      gameWindow.plantConfig.setDeterministicMode(true, seed);
+    } else if (game.soilManager?.plantSimulation?.plantConfig) {
+      game.soilManager.plantSimulation.plantConfig.setDeterministicMode(true, seed);
+    } else {
+      // If plantConfig isn't accessible, fall back to mocking Math.random
+      console.warn('PlantConfig not found, falling back to Math.random mock');
+      this.mockRandomForPlants(0.5);
+    }
   }
 };

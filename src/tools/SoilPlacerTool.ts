@@ -18,6 +18,7 @@ import { SoilInventory } from '../inventory/SoilInventory';
 import { SoilItem } from '../items/SoilItem';
 import { NutrientSystem } from '../farming/NutrientSystem';
 import { SoilManager } from '../farming/SoilManager';
+import { DOMUtils } from '../utils/DOMUtils';
 
 export class SoilPlacerTool {
   private selectedSlot: number | null = null;
@@ -101,26 +102,21 @@ export class SoilPlacerTool {
    * @returns true if placement successful
    */
   public placeSoil(coord: HexCoord3D, amount: number = 1.0): boolean {
-    console.log('placeSoil called', coord, amount);
     const selectedSoil = this.getSelectedSoil();
-    console.log('selectedSoil:', selectedSoil, 'selectedSlot:', this.selectedSlot);
     
     if (!selectedSoil || this.selectedSlot === null || !this.soilManager) {
-      console.log('Missing requirements:', { selectedSoil: !!selectedSoil, selectedSlot: this.selectedSlot, soilManager: !!this.soilManager });
       return false;
     }
 
     // Check if we have enough soil (for now, always use 1.0 hex worth regardless of amount parameter)
     // TODO: In future, support fractional hex placement
     if (selectedSoil.quantity < 1.0) {
-      console.log(`Not enough soil. Have ${selectedSoil.quantity}, need 1.0`);
       return false;
     }
 
     // Try to place new soil hex using SoilManager's placement logic
     const placed = this.soilManager.placeSoil(coord);
     if (!placed) {
-      console.log('SoilManager.placeSoil returned false - invalid placement location');
       return false;
     }
 
@@ -162,7 +158,6 @@ export class SoilPlacerTool {
     // Update soil colors to reflect new nutrients
     this.soilManager.updateSoilColors();
 
-    console.log(`Placed 1.0 soil at ${coord.q},${coord.r},${coord.y}`);
     return true;
   }
 
@@ -241,7 +236,102 @@ export class SoilPlacerTool {
       `;
     }
 
-    this.previewElement.innerHTML = previewContent;
+    // Clear and rebuild preview safely without innerHTML
+    this.previewElement.textContent = '';
+    
+    // Build preview content using safe DOM methods
+    if (existingNutrients) {
+      // Cannot place here - soil already exists
+      const title = document.createElement('div');
+      title.style.cssText = 'font-weight: bold; margin-bottom: 5px; color: #f56565;';
+      title.textContent = 'Cannot Place Here';
+      this.previewElement.appendChild(title);
+      
+      const info = document.createElement('div');
+      info.style.color = '#a0aec0';
+      info.textContent = 'Soil already exists at this location';
+      this.previewElement.appendChild(info);
+      
+      const currentLabel = document.createElement('div');
+      currentLabel.style.color = '#a0aec0';
+      currentLabel.textContent = 'Current nutrients:';
+      this.previewElement.appendChild(currentLabel);
+      
+      const grid = document.createElement('div');
+      grid.style.cssText = 'display: grid; grid-template-columns: auto auto; gap: 5px; margin-top: 5px;';
+      
+      const nutrients = [
+        { label: 'N:', value: formatPercent(existingNutrients.nitrogen), color: '#ff6b6b' },
+        { label: 'P:', value: formatPercent(existingNutrients.phosphorus), color: '#51cf66' },
+        { label: 'K:', value: formatPercent(existingNutrients.potassium), color: '#339af0' }
+      ];
+      
+      nutrients.forEach(n => {
+        const labelDiv = document.createElement('div');
+        labelDiv.style.color = n.color;
+        labelDiv.textContent = n.label;
+        grid.appendChild(labelDiv);
+        
+        const valueDiv = document.createElement('div');
+        valueDiv.textContent = n.value;
+        grid.appendChild(valueDiv);
+      });
+      
+      this.previewElement.appendChild(grid);
+    } else if (canPlace) {
+      // Can place new hex
+      const title = document.createElement('div');
+      title.style.cssText = 'font-weight: bold; margin-bottom: 5px; color: #48bb78;';
+      title.textContent = 'New Soil Hex';
+      this.previewElement.appendChild(title);
+      
+      const info = document.createElement('div');
+      info.style.cssText = 'margin-bottom: 8px; color: #a0aec0;';
+      info.appendChild(document.createTextNode(`Placing: ${selectedSoil.getDisplayName()}`));
+      info.appendChild(document.createElement('br'));
+      info.appendChild(document.createTextNode('Amount: 1 hex'));
+      this.previewElement.appendChild(info);
+      
+      const grid = document.createElement('div');
+      grid.style.cssText = 'display: grid; grid-template-columns: auto auto; gap: 5px;';
+      
+      const nutrients = [
+        { label: 'N:', value: `${selectedSoil.nutrients.nitrogen}%`, color: '#ff6b6b' },
+        { label: 'P:', value: `${selectedSoil.nutrients.phosphorus}%`, color: '#51cf66' },
+        { label: 'K:', value: `${selectedSoil.nutrients.potassium}%`, color: '#339af0' }
+      ];
+      
+      nutrients.forEach(n => {
+        const labelDiv = document.createElement('div');
+        labelDiv.style.color = n.color;
+        labelDiv.textContent = n.label;
+        grid.appendChild(labelDiv);
+        
+        const valueDiv = document.createElement('div');
+        valueDiv.textContent = n.value;
+        grid.appendChild(valueDiv);
+      });
+      
+      this.previewElement.appendChild(grid);
+      
+      const hint = document.createElement('div');
+      hint.style.cssText = 'margin-top: 8px; color: #718096; font-size: 11px;';
+      hint.textContent = 'Click to place new soil hex';
+      this.previewElement.appendChild(hint);
+    } else {
+      // Can't place here (mid-air, etc)
+      const title = document.createElement('div');
+      title.style.cssText = 'font-weight: bold; margin-bottom: 5px; color: #f56565;';
+      title.textContent = 'Cannot Place Here';
+      this.previewElement.appendChild(title);
+      
+      const info = document.createElement('div');
+      info.style.color = '#a0aec0';
+      info.appendChild(document.createTextNode('Invalid placement location'));
+      info.appendChild(document.createElement('br'));
+      info.appendChild(document.createTextNode('Must place on ground or existing soil'));
+      this.previewElement.appendChild(info);
+    }
 
     // Position near mouse
     this.previewElement.style.left = `${mouseX + 15}px`;

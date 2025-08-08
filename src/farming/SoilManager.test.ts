@@ -102,7 +102,6 @@ describe('SoilManager Shift+Scroll', () => {
     
     // Get initial state
     const initialY = soilManager.getPlacementHeight();
-    console.log('Initial placement height:', initialY);
     
     // Simulate shift+scroll up (negative delta should increase height)
     inputState.shift = true;
@@ -110,22 +109,11 @@ describe('SoilManager Shift+Scroll', () => {
     
     // Access private members for testing
     const soilManagerAny = soilManager as any;
-    console.log('Before shift+scroll:');
-    console.log('  hoveredHex:', soilManagerAny.hoveredHex);
-    console.log('  targetY:', soilManagerAny.targetY);
-    console.log('  hasScrolled:', soilManagerAny.hasScrolled);
-    console.log('  useManualHeight:', soilManagerAny.useManualHeight);
     
     soilManager.update(inputState, mockCamera);
     
-    console.log('After shift+scroll:');
-    console.log('  targetY:', soilManagerAny.targetY);
-    console.log('  hoveredY:', soilManagerAny.hoveredY);
-    console.log('  hasScrolled:', soilManagerAny.hasScrolled);
-    console.log('  useManualHeight:', soilManagerAny.useManualHeight);
     
     const newY = soilManager.getPlacementHeight();
-    console.log('New placement height:', newY);
     
     // Should have increased the height
     expect(newY).toBe(initialY + 1);
@@ -148,10 +136,6 @@ describe('SoilManager Shift+Scroll', () => {
     }
     
     const soilManagerAny = soilManager as any;
-    console.log('After multiple scrolls:');
-    console.log('  targetY:', soilManagerAny.targetY);
-    console.log('  hoveredY:', soilManagerAny.hoveredY);
-    console.log('  Column height:', 2);
     
     // Should be capped at maxHeight + 1 (2 + 1 = 3)
     expect(soilManager.getPlacementHeight()).toBe(3);
@@ -186,18 +170,9 @@ describe('SoilManager Shift+Scroll', () => {
     const soilManagerAny = soilManager as any;
     
     // Log initial state
-    console.log('\n=== Full Flow Test ===');
-    console.log('Initial state:');
-    console.log('  hoveredHex:', soilManagerAny.hoveredHex);
-    console.log('  targetY:', soilManagerAny.targetY);
-    console.log('  hoveredY:', soilManagerAny.hoveredY);
     
     // First update to establish hover
     soilManager.update(inputState, mockCamera);
-    console.log('\nAfter first update (hover):');
-    console.log('  hoveredHex:', soilManagerAny.hoveredHex);
-    console.log('  targetY:', soilManagerAny.targetY);
-    console.log('  hoveredY:', soilManagerAny.hoveredY);
     
     // Shift+scroll
     inputState.shift = true;
@@ -205,17 +180,8 @@ describe('SoilManager Shift+Scroll', () => {
     
     // Check the condition that should trigger
     const condition = inputState.scrollDelta !== 0 && soilManagerAny.hoveredHex && inputState.shift;
-    console.log('\nShift+scroll condition check:');
-    console.log('  scrollDelta !== 0:', inputState.scrollDelta !== 0);
-    console.log('  hoveredHex exists:', !!soilManagerAny.hoveredHex);
-    console.log('  shift pressed:', inputState.shift);
-    console.log('  Condition result:', condition);
     
     soilManager.update(inputState, mockCamera);
-    console.log('\nAfter shift+scroll update:');
-    console.log('  targetY:', soilManagerAny.targetY);
-    console.log('  hoveredY:', soilManagerAny.hoveredY);
-    console.log('  hasScrolled:', soilManagerAny.hasScrolled);
     
     // The key assertion
     expect(soilManagerAny.hoveredY).toBe(1);

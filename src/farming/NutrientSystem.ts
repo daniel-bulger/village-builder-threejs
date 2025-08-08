@@ -85,13 +85,11 @@ export class NutrientSystem {
     const key = HexUtils.hex3DToKey(coord);
     const hex = this.hexes.get(key);
     if (!hex) {
-      console.log(`[NutrientSystem] No hex found at ${key} for nutrient depletion`);
       return false;
     }
     
     const needs = CROP_NUTRIENT_NEEDS[cropType];
     if (!needs) {
-      console.log(`[NutrientSystem] No nutrient needs defined for crop type: ${cropType}`);
       return false;
     }
     

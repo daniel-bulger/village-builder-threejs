@@ -19,17 +19,13 @@ export function getPerformanceSettings() {
       settings.useMeshPooling = true;
       settings.useInstancedSoilRendering = true;
       settings.plantLODEnabled = true;
-      console.log('🚀 All performance optimizations enabled');
     } else if (optimizeValue === 'water') {
       settings.useOptimizedWaterSim = true;
-      console.log('💧 Water simulation optimization enabled');
     } else if (optimizeValue === 'plants') {
       settings.useMeshPooling = true;
       settings.plantLODEnabled = true;
-      console.log('🌱 Plant rendering optimization enabled');
     } else if (optimizeValue === 'soil') {
       settings.useInstancedSoilRendering = true;
-      console.log('🟫 Soil instancing optimization enabled');
     }
   }
   
@@ -59,31 +55,6 @@ export function getPerformanceSettings() {
 
 // Usage instructions
 export function printPerformanceHelp() {
-  console.log(`
-=== Performance Optimization Guide ===
-
-To enable optimizations, add URL parameters:
-
-1. Enable ALL optimizations:
-   ?optimize=all
-
-2. Enable specific optimizations:
-   ?optimize=water    - Optimized water simulation
-   ?optimize=plants   - Plant mesh pooling and LOD
-   ?optimize=soil     - Instanced soil rendering
-
-3. Fine-grained control:
-   ?waterOpt=true     - Optimized water simulation
-   ?plantPool=true    - Plant mesh pooling
-   ?soilInstance=true - Instanced soil rendering  
-   ?plantLOD=true     - Plant level-of-detail
-   ?perfStats=true    - Show performance stats
-
-4. Example combinations:
-   ?optimize=all&perfStats=true
-   ?waterOpt=true&plantPool=true
-   
-Current settings:`, getPerformanceSettings());
 }
 
 // Auto-print help if debug mode

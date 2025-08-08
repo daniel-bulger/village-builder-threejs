@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>House Building Test</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+        #controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #444;
+            max-width: 300px;
+            z-index: 1000;
+        }
+        h2 {
+            margin-top: 0;
+            color: #4CAF50;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            background: linear-gradient(to bottom, #4a4a4a, #333);
+            border: 1px solid #666;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: linear-gradient(to bottom, #5a5a5a, #444);
+            transform: translateY(-1px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        #status {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
+        iframe {
+            width: 100vw;
+            height: 100vh;
+            border: none;
+        }
+        #screenshot-area {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 10px;
+            border-radius: 10px;
+            display: none;
+            max-width: 400px;
+        }
+        #screenshot-area img {
+            max-width: 100%;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <iframe id="gameFrame" src="http://localhost:5173"></iframe>
+    
+    <div id="controls">
+        <h2>🏠 House Builder Test</h2>
+        
+        <button onclick="prepareGame()">1. Prepare Game</button>
+        <button onclick="buildSimpleHouse()">2. Build Simple House</button>
+        <button onclick="buildComplexHouse()">3. Build Complex House</button>
+        <button onclick="clearAll()">Clear All</button>
+        <button onclick="rotateCamera()">Rotate Camera</button>
+        <button onclick="overheadView()">Overhead View</button>
+        <button onclick="takeScreenshot()">📸 Take Screenshot</button>
+        
+        <div id="status">
+            <div class="info">Click "Prepare Game" to start</div>
+        </div>
+    </div>
+    
+    <div id="screenshot-area">
+        <h3>Screenshot</h3>
+        <img id="screenshot-img" />
+        <button onclick="closeScreenshot()">Close</button>
+    </div>
+    
+    <script>
+        let gameWindow = null;
+        let game = null;
+        
+        function log(message, type = 'info') {
+            const status = document.getElementById('status');
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            status.appendChild(entry);
+            status.scrollTop = status.scrollHeight;
+        }
+        
+        function prepareGame() {
+            const iframe = document.getElementById('gameFrame');
+            gameWindow = iframe.contentWindow;
+            
+            setTimeout(() => {
+                game = gameWindow.game;
+                if (!game) {
+                    log('Game not loaded yet, trying again...', 'error');
+                    setTimeout(prepareGame, 2000);
+                    return;
+                }
+                
+                log('Game loaded!', 'success');
+                
+                // Add test materials
+                gameWindow.document.dispatchEvent(new KeyboardEvent('keydown', { key: 't' }));
+                log('Test materials added', 'success');
+                
+                // Make game accessible
+                window.game = game;
+                log('Ready to build!', 'success');
+            }, 2000);
+        }
+        
+        function buildSimpleHouse() {
+            if (!game) {
+                log('Please prepare game first!', 'error');
+                return;
+            }
+            
+            const manager = game.buildingManager;
+            
+            // Clear existing
+            Array.from(manager.components.values()).forEach(comp => {
+                manager.removeComponent(comp.id);
+            });
+            log('Cleared existing components', 'info');
+            
+            // Build simple 1-room house
+            log('Building simple house...', 'info');
+            
+            // Foundation
+            const foundation = manager.placeComponent({
+                type: 'foundation',
+                material: 'stone',
+                position: { q: 0, r: 0, y: 0 },
+                level: 0
+            });
+            
+            if (foundation) {
+                log('✓ Foundation placed', 'success');
+            } else {
+                log('✗ Foundation failed', 'error');
+            }
+            
+            // Walls (all 6 edges)
+            let wallCount = 0;
+            for (let edge = 0; edge < 6; edge++) {
+                const wall = manager.placeComponent({
+                    type: 'wall',
+                    material: 'wood',
+                    position: { q: 0, r: 0, y: 0 },
+                    level: 0,
+                    wallAlignment: edge
+                });
+                if (wall) wallCount++;
+            }
+            log(`✓ ${wallCount}/6 walls placed`, wallCount === 6 ? 'success' : 'error');
+            
+            // Roof
+            const roof = manager.placeComponent({
+                type: 'floor',
+                material: 'wood',
+                position: { q: 0, r: 0, y: 1 },
+                level: 1
+            });
+            
+            if (roof) {
+                log('✓ Roof placed', 'success');
+            } else {
+                log('✗ Roof failed', 'error');
+            }
+            
+            log(`Simple house complete! (${manager.components.size} components)`, 'success');
+        }
+        
+        function buildComplexHouse() {
+            if (!game) {
+                log('Please prepare game first!', 'error');
+                return;
+            }
+            
+            const manager = game.buildingManager;
+            
+            // Clear existing
+            Array.from(manager.components.values()).forEach(comp => {
+                manager.removeComponent(comp.id);
+            });
+            log('Cleared existing components', 'info');
+            
+            log('Building complex multi-hex house...', 'info');
+            
+            // Multiple foundations
+            const positions = [
+                { q: 0, r: 0, y: 0 },
+                { q: 1, r: 0, y: 0 },
+                { q: 0, r: 1, y: 0 },
+                { q: 1, r: -1, y: 0 }
+            ];
+            
+            let foundationCount = 0;
+            positions.forEach(pos => {
+                const f = manager.placeComponent({
+                    type: 'foundation',
+                    material: 'stone',
+                    position: pos,
+                    level: 0
+                });
+                if (f) foundationCount++;
+            });
+            log(`✓ ${foundationCount}/4 foundations placed`, 'success');
+            
+            // Walls for each hex
+            let wallCount = 0;
+            const wallConfigs = [
+                { pos: { q: 0, r: 0, y: 0 }, edges: [0, 1, 4, 5] },
+                { pos: { q: 1, r: 0, y: 0 }, edges: [0, 1, 2] },
+                { pos: { q: 0, r: 1, y: 0 }, edges: [2, 3, 4] },
+                { pos: { q: 1, r: -1, y: 0 }, edges: [5, 0, 1] }
+            ];
+            
+            wallConfigs.forEach(config => {
+                config.edges.forEach(edge => {
+                    const w = manager.placeComponent({
+                        type: 'wall',
+                        material: 'wood',
+                        position: config.pos,
+                        level: 0,
+                        wallAlignment: edge
+                    });
+                    if (w) wallCount++;
+                });
+            });
+            log(`✓ ${wallCount} walls placed`, 'success');
+            
+            // Add pillars for support
+            let pillarCount = 0;
+            [
+                { pos: { q: 0, r: 0, y: 0 }, vertex: 0 },
+                { pos: { q: 0, r: 0, y: 0 }, vertex: 3 },
+                { pos: { q: 1, r: 0, y: 0 }, vertex: 1 }
+            ].forEach(config => {
+                const p = manager.placeComponent({
+                    type: 'pillar',
+                    material: 'stone',
+                    position: config.pos,
+                    level: 0,
+                    vertexIndex: config.vertex
+                });
+                if (p) pillarCount++;
+            });
+            log(`✓ ${pillarCount} pillars placed`, 'success');
+            
+            // Second floor
+            let floorCount = 0;
+            positions.forEach(pos => {
+                const f = manager.placeComponent({
+                    type: 'floor',
+                    material: 'wood',
+                    position: { q: pos.q, r: pos.r, y: 1 },
+                    level: 1
+                });
+                if (f) floorCount++;
+            });
+            log(`✓ ${floorCount}/4 second floor tiles placed`, 'success');
+            
+            log(`Complex house complete! (${manager.components.size} components)`, 'success');
+        }
+        
+        function clearAll() {
+            if (!game) {
+                log('Please prepare game first!', 'error');
+                return;
+            }
+            
+            const manager = game.buildingManager;
+            Array.from(manager.components.values()).forEach(comp => {
+                manager.removeComponent(comp.id);
+            });
+            log('All components cleared', 'info');
+        }
+        
+        function rotateCamera() {
+            if (!game) return;
+            game.cameraController.angle += Math.PI / 4;
+            log('Camera rotated', 'info');
+        }
+        
+        function overheadView() {
+            if (!gameWindow) return;
+            gameWindow.document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+            log('Switched to overhead view', 'info');
+        }
+        
+        function takeScreenshot() {
+            if (!gameWindow) {
+                log('Game not loaded', 'error');
+                return;
+            }
+            
+            // Trigger screenshot in game
+            gameWindow.document.dispatchEvent(new KeyboardEvent('keydown', { 
+                key: 'F12',
+                code: 'F12'
+            }));
+            
+            log('Screenshot saved (check downloads)', 'success');
+        }
+        
+        function closeScreenshot() {
+            document.getElementById('screenshot-area').style.display = 'none';
+        }
+        
+        // Auto-prepare after page loads
+        window.addEventListener('load', () => {
+            setTimeout(prepareGame, 3000);
+        });
+    </script>
+</body>
+</html>

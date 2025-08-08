@@ -99,7 +99,6 @@ export class SoilManager {
     
     // Set up plant inspector callbacks
     this.plantInspectorUI.setUprootCallback((plantId) => {
-      console.log(`Attempting to uproot plant ${plantId}`);
       
       // Directly uproot using the plant ID
       const uprootedData = this.plantSimulation.uprootPlant(plantId);
@@ -109,9 +108,7 @@ export class SoilManager {
         if (game && game.inventorySystem) {
           const success = game.inventorySystem.addUprootedPlant(uprootedData);
           if (success) {
-            console.log(`Uprooted ${uprootedData.typeName} and added to inventory`);
           } else {
-            console.log('Failed to add uprooted plant to inventory - no empty slots');
           }
         }
       } else {
@@ -124,7 +121,6 @@ export class SoilManager {
       if (plant) {
         const harvestYield = this.plantSimulation.harvestPlant(plantId);
         if (harvestYield > 0) {
-          console.log(`Harvested ${harvestYield} items from inspector`);
         }
       }
     });
@@ -292,6 +288,19 @@ export class SoilManager {
   }
   
   private updatePreview(mousePos: { x: number; y: number }, camera: THREE.Camera, input: InputState): void {
+    // Skip preview update if using construction tool
+    if (input.currentTool === 'construction' || input.currentTool === 'construction_tool') {
+      this.placementPreview.visible = false;
+      this.subHexPreview.visible = false;
+      if (this.edgePreview) {
+        this.edgePreview.visible = false;
+      }
+      this.hoveredHex = null;
+      this.hoveredWorldPos = null;
+      this.hoveredY = 0;
+      return;
+    }
+    
     // Cast ray from camera through mouse position
     this.raycaster.setFromCamera(
       new THREE.Vector2(mousePos.x, mousePos.y),
@@ -887,14 +896,6 @@ export class SoilManager {
     
     // Log if slow (every ~100 calls to avoid spam)
     if (totalTime > 10 && Math.random() < 0.01) {
-      console.log('Water/Plant tick performance:');
-      console.log(`  Water sim: ${waterTime.toFixed(2)}ms`);
-      console.log(`  Water visuals: ${waterVisualTime.toFixed(2)}ms`);
-      console.log(`  Plant sim: ${plantSimTime.toFixed(2)}ms (${plants.length} plants)`);
-      console.log(`  Plant render: ${plantRenderTime.toFixed(2)}ms`);
-      console.log(`  Organic sim: ${organicSimTime.toFixed(2)}ms (${organicPlants.length} plants)`);
-      console.log(`  Organic render: ${organicRenderTime.toFixed(2)}ms`);
-      console.log(`  Total: ${totalTime.toFixed(2)}ms`);
     }
   }
   
@@ -912,14 +913,12 @@ export class SoilManager {
     const activeItem = game?.unifiedInventorySystem?.getActiveItem();
     
     if (!activeItem || activeItem.id !== 'watering_can') {
-      console.log('No watering can equipped');
       return false;
     }
     
     // Check if watering can has water
     const waterInCan = activeItem.metadata?.waterAmount || 0;
     if (waterInCan < 1000) { // Need at least 1L to water
-      console.log('Watering can is empty!');
       return false;
     }
     
@@ -932,7 +931,6 @@ export class SoilManager {
     if (waterAdded) {
       // Reduce water in can
       activeItem.metadata.waterAmount -= waterToUse;
-      console.log(`Used ${waterToUse/1000}L of water. ${activeItem.metadata.waterAmount/1000}L remaining in can.`);
       
       // Update visuals
       this.updateWaterVisuals();
@@ -1107,7 +1105,6 @@ export class SoilManager {
     // Check if there's soil at this position
     const hex3DKey = HexUtils.hex3DToKey(hexCoord);
     if (!this.soilHexes.has(hex3DKey)) {
-      console.log('Cannot plant - no soil here');
       return false;
     }
     
@@ -1122,7 +1119,6 @@ export class SoilManager {
     
     // Check if there are enough nutrients for this plant type
     if (!this.nutrientSystem.hasEnoughNutrients(hexCoord, plantType)) {
-      console.log('Cannot plant - insufficient nutrients in soil');
       return false;
     }
     
@@ -1136,7 +1132,6 @@ export class SoilManager {
       // Replant uprooted plant
       const plantData = activeItem.metadata.plantState;
       if (!this.plantSimulation.canPlantAt(plantWorldPos, plantData.typeId)) {
-        console.log('Cannot replant - space occupied');
         return false;
       }
       
@@ -1144,19 +1139,16 @@ export class SoilManager {
       if (success) {
         // Remove from inventory
         game.unifiedInventorySystem.consumeActiveItem();
-        console.log(`Replanted ${activeItem.name}`);
         return true;
       }
     } else {
       // Plant new seed
       if (!this.plantSimulation.canPlantAt(plantWorldPos, plantType)) {
-        console.log('Cannot plant - space occupied');
         return false;
       }
       
       const plantId = this.plantSimulation.plantSeed(plantType, plantWorldPos);
       if (plantId) {
-        console.log(`Planted ${plantType} at sub-hex position`);
         
         // Consume one seed from inventory
         if (activeItem && activeItem.type === 'seed') {
@@ -1179,13 +1171,11 @@ export class SoilManager {
     
     const plant = this.plantSimulation.getPlantAt(harvestWorldPos);
     if (!plant) {
-      console.log('No plant to harvest here');
       return false;
     }
     
     const harvestYield = this.plantSimulation.harvestPlant(plant.id);
     if (harvestYield > 0) {
-      console.log(`Harvested ${harvestYield} items`);
       return true;
     }
     
@@ -1202,19 +1192,15 @@ export class SoilManager {
       uprootWorldPos.y = hexCoord.y * Constants.HEX_HEIGHT + Constants.HEX_HEIGHT;
     }
     
-    console.log('Looking for plant at position:', uprootWorldPos);
     const plant = this.plantSimulation.getPlantAt(uprootWorldPos);
     if (!plant) {
-      console.log('No plant to uproot at position:', uprootWorldPos);
       // Try with adjusted Y as fallback
       uprootWorldPos.y = hexCoord.y * Constants.HEX_HEIGHT + Constants.HEX_HEIGHT;
       const plantRetry = this.plantSimulation.getPlantAt(uprootWorldPos);
       if (!plantRetry) {
-        console.log('No plant found even with adjusted Y:', uprootWorldPos);
         return false;
       }
       // Found with adjusted Y
-      console.log('Found plant with adjusted Y');
       return this.performUproot(plantRetry);
     }
     
@@ -1229,10 +1215,8 @@ export class SoilManager {
       if (game && game.inventorySystem) {
         const success = game.inventorySystem.addUprootedPlant(uprootedData);
         if (success) {
-          console.log(`Uprooted ${uprootedData.typeName} and added to inventory`);
           return true;
         } else {
-          console.log('Failed to add uprooted plant to inventory - no empty slots');
           // Still uprooted, but couldn't add to inventory
           return true;
         }
@@ -1377,7 +1361,6 @@ export class SoilManager {
     
     const plant = this.plantSimulation.getPlantAt(adjustedWorldPos);
     if (plant) {
-      console.log('Inspecting plant:', plant);
     }
   }
   
@@ -1407,7 +1390,6 @@ export class SoilManager {
     
     const plantId = this.organicPlantSimulation.plantSeed('organic_tomato', adjustedWorldPos);
     if (plantId) {
-      console.log(`Planted organic tomato: ${plantId}`);
       return true;
     }
     
@@ -1450,7 +1432,6 @@ export class SoilManager {
     this.plantRenderer.setVisible(this.soilVisible);
     this.organicPlantRenderer.setVisible(this.soilVisible);
     
-    console.log(`Soil visibility: ${this.soilVisible ? 'ON' : 'OFF'}`);
   }
 
   setSoilPlacerTool(tool: any): void {
@@ -1458,7 +1439,6 @@ export class SoilManager {
   }
 
   private handleSoilPlacement(hex3D: HexCoord3D, input: InputState): void {
-    console.log('handleSoilPlacement called', hex3D);
     
     if (!this.soilPlacerTool) {
       console.warn('Soil placer tool not set');
@@ -1470,11 +1450,9 @@ export class SoilManager {
     
     // Determine amount based on shift key (for future use)
     const amount = input.shift ? 0.1 : 1.0;
-    console.log('Placing amount:', amount, 'shift:', input.shift);
     
     // Place soil
     const success = this.soilPlacerTool.placeSoil(hex3D, amount);
-    console.log('Placement success:', success);
     
     if (success) {
       // Update visual immediately
@@ -1492,21 +1470,18 @@ export class SoilManager {
     
     // Check if we can place soil here
     if (!this.canPlaceSoilAt(hexCoord)) {
-      console.log('Cannot place soil at this location');
       return;
     }
     
     // Get active item from inventory
     const activeItem = game.unifiedInventorySystem.getActiveItem();
     if (!activeItem || activeItem.type !== 'resource' || !activeItem.id.startsWith('soil_')) {
-      console.log('No soil selected in inventory');
       return;
     }
     
     // Check if we have at least 1 unit of soil
     const quantity = game.unifiedInventorySystem.getActiveItemQuantity();
     if (quantity < 1) {
-      console.log('Not enough soil to place (need at least 1 unit)');
       return;
     }
     
@@ -1527,7 +1502,6 @@ export class SoilManager {
     // Add to nutrient system with nutrients from inventory item
     if (activeItem.metadata?.nutrients) {
       const nutrients = activeItem.metadata.nutrients;
-      console.log('Applying nutrients from inventory:', nutrients);
       this.nutrientSystem.addHex(hexCoord, {
         nitrogen: nutrients.nitrogen / 100, // Convert from percentage to 0-1
         phosphorus: nutrients.phosphorus / 100,
@@ -1548,7 +1522,6 @@ export class SoilManager {
     // Use one unit of soil from inventory
     const used = game.unifiedInventorySystem.useActiveItem(1);
     if (used) {
-      console.log('Placed soil from inventory');
       // Update UI
       game.unifiedInventoryUI.update();
       // Update soil colors to reflect new nutrients

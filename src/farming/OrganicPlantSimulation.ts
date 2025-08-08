@@ -32,12 +32,6 @@ export class OrganicPlantSimulation {
     const yLevel = Math.round(worldPos.y / Constants.HEX_HEIGHT);
     const origin: SubHexCoord3D = { ...position, y: yLevel };
     
-    console.log(`Planting organic ${typeId} at:`, {
-      worldPos,
-      subHex: position,
-      yLevel,
-      mainHex: { q: position.parentQ, r: position.parentR }
-    });
     
     // Create plant instance
     const plantId = `plant_${this.nextId++}`;
@@ -72,7 +66,6 @@ export class OrganicPlantSimulation {
       
       // Check if position is valid
       if (!this.isValidGrowthPosition(compPos, seedComp.type)) {
-        console.log(`Cannot plant here - invalid position for ${seedComp.type}`);
         return null;
       }
       
@@ -136,12 +129,6 @@ export class OrganicPlantSimulation {
     
     // Debug log every 60 seconds
     if (Math.floor(plant.age) % 60 === 0 && Math.floor(plant.age - deltaTime) % 60 !== 0) {
-      console.log(`[Plant ${plantId}] Status:`, {
-        resources: plant.resources,
-        componentCounts: plant.componentCount,
-        growthPointCount: plant.growthPoints.size,
-        isDaytime
-      });
     }
     
     for (const [gpId, growthPoint] of plant.growthPoints) {
@@ -153,14 +140,6 @@ export class OrganicPlantSimulation {
         
         // Log growth accumulation details periodically
         if (Math.floor(plant.age) % 30 === 0 && Math.floor(plant.age - deltaTime) % 30 !== 0) {
-          console.log(`[GP ${gpId}] Growth accumulation:`, {
-            type: growthPoint.type,
-            potential: growthPoint.growthPotential.toFixed(2),
-            rate: rate.toFixed(3),
-            threshold: plantType.growthRules.growthThreshold,
-            dominance: growthPoint.dominance.toFixed(2),
-            age: growthPoint.age.toFixed(0)
-          });
         }
         
         // Check if ready to grow
@@ -172,14 +151,6 @@ export class OrganicPlantSimulation {
         if (Math.floor(plant.age) % 30 === 0 && Math.floor(plant.age - deltaTime) % 30 !== 0) {
           const hasLeaves = plant.componentCount.leaf > 0;
           const minEnergyForGrowth = hasLeaves ? 2 : 0.5;
-          console.log(`[GP ${gpId}] Growth blocked:`, {
-            type: growthPoint.type,
-            energy: plant.resources.energy.toFixed(1),
-            water: plant.resources.water.toFixed(2),
-            isDaytime,
-            minEnergyNeeded: minEnergyForGrowth,
-            hasLeaves
-          });
         }
       }
     }
@@ -240,19 +211,16 @@ export class OrganicPlantSimulation {
   }
   
   private attemptGrowth(plant: OrganicPlantState, plantType: OrganicPlantType, growthPoint: GrowthPoint): void {
-    console.log(`[attemptGrowth] Starting for GP ${growthPoint.id}`);
     
     // Determine what type of component to grow
     const parentComponent = plant.components.get(growthPoint.parentComponentId!);
     if (!parentComponent) {
-      console.log(`[attemptGrowth] No parent component found`);
       return;
     }
     
     // Choose growth direction based on type
     const newPosition = this.chooseGrowthDirection(plant, plantType, growthPoint, parentComponent);
     if (!newPosition) {
-      console.log(`[attemptGrowth] No valid growth direction found`);
       return;
     }
     
@@ -272,12 +240,6 @@ export class OrganicPlantSimulation {
     
     // Check limits
     if (!this.checkGrowthLimits(plant, plantType, newType)) {
-      console.log(`[attemptGrowth] Growth limit reached for ${newType}:`, {
-        currentCount: plant.componentCount[newType],
-        maxAllowed: newType === 'root' ? plantType.maxRoots : 
-                    newType === 'leaf' ? plantType.maxLeaves : 
-                    'height-based'
-      });
       return;
     }
     
@@ -357,12 +319,10 @@ export class OrganicPlantSimulation {
             // Move the leaf to new position
             existingComponent.position = leafNewPos;
             this.registerComponent(leafNewPos, existingComponentId);
-            console.log(`[attemptGrowth] Displaced leaf ${existingComponentId} to new position`);
           } else {
             // If no valid position, remove the leaf (it got crushed)
             plant.components.delete(existingComponentId);
             plant.componentCount.leaf--;
-            console.log(`[attemptGrowth] Removed leaf ${existingComponentId} - no space to relocate`);
           }
         }
       }
@@ -381,12 +341,6 @@ export class OrganicPlantSimulation {
     const energyCost = newType === 'root' ? 4 : 2;
     plant.resources.energy = Math.max(0, plant.resources.energy - energyCost);
     
-    console.log(`[attemptGrowth] SUCCESS - grew ${newType} at position:`, {
-      position: newPosition,
-      energyCostPaid: energyCost,
-      remainingEnergy: plant.resources.energy.toFixed(1),
-      newComponentCounts: plant.componentCount
-    });
   }
   
   private chooseGrowthDirection(
@@ -463,7 +417,6 @@ export class OrganicPlantSimulation {
       const adjustedVerticalBias = patterns.verticalBias * (1 - crowdingFactor * 0.95); // Reduce bias by up to 95% when crowded
       
       if (stemsAbove > 0) {
-        console.log(`[Growth] Crowding detected: ${stemsAbove} stems above, adjustedBias: ${adjustedVerticalBias.toFixed(2)} (was ${patterns.verticalBias})`);
       }
       
       // Add some randomness for natural growth
@@ -483,7 +436,6 @@ export class OrganicPlantSimulation {
       }
       
       // Option 2: Try spreading sideways
-      console.log(`[Growth] Checking lateral options from position:`, currentPos);
       const lateralPos = this.chooseBestLightPosition(currentPos, plant, plantType, true);
       if (lateralPos) {
         // Score for growing sideways - increased by crowding
@@ -495,13 +447,11 @@ export class OrganicPlantSimulation {
       
       // Choose best option
       if (growthOptions.length === 0) {
-        console.log(`[Growth] No valid growth options!`);
         return null;
       }
       
       growthOptions.sort((a, b) => b.score - a.score);
       const chosen = growthOptions[0];
-      console.log(`[Growth] Chose ${chosen.type} growth with score ${chosen.score.toFixed(2)}`);
       return chosen.pos;
     }
     
@@ -729,13 +679,11 @@ export class OrganicPlantSimulation {
         if (existingComponent) {
           // Stems can grow through leaves (pushing them aside)
           if (componentType === 'stem' && existingComponent.type === 'leaf') {
-            console.log(`[isValidGrowthPosition] Stem will push through leaf at ${key}`);
             return true; // Allow stem to grow here
           }
         }
       }
       
-      console.log(`[isValidGrowthPosition] Position already occupied at ${key} by ${existingComponentId}`);
       return false;
     }
     
@@ -761,7 +709,6 @@ export class OrganicPlantSimulation {
       );
       
       if (!hasSoil) {
-        console.log(`No soil for root at hex ${hexCoord.q},${hexCoord.r},${hexCoord.y}`);
       }
       
       return hasSoil;

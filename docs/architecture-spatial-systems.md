@@ -432,14 +432,5 @@ throw new SpatialSystemError(
 ## Future Considerations
 
 ### Planned Extensions
-1. Underground construction
-2. Floating/magical structures
-3. Moving buildings (on rails)
-4. District-level management
-5. Inter-building connections
-
-### API Stability
-- Core interfaces marked as stable
-- Extension points documented
-- Deprecation policy for changes
-- Versioned save format
+1. District-level management
+1. Inter-building connections

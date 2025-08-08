@@ -3,6 +3,7 @@ import { HexCoord3D, HexUtils } from '../utils/HexUtils';
 import { SubHexCoord3D, SubHexUtils } from '../utils/SubHexUtils';
 import { Constants } from '../utils/Constants';
 import { WaterSimulation } from './WaterSimulation';
+import { plantConfig } from './PlantConfig';
 import { 
   PlantType, 
   PlantState, 
@@ -22,7 +23,6 @@ class PlantSpatialIndex {
         // Already owned by this plant, that's OK
         return true;
       }
-      console.log(`    SubHex ${key} already occupied by ${currentOccupant}`);
       return false; // Occupied by another plant
     }
     this.subHexOccupancy.set(key, plantId);
@@ -80,11 +80,7 @@ export class PlantSimulation {
     const position = SubHexUtils.worldToSubHex(worldPos);
     // Calculate Y level from world position
     // worldPos is already at the top of the soil hex from SoilManager
-    console.log(`PlantSeed: worldPos = (${worldPos.x}, ${worldPos.y}, ${worldPos.z})`);
-    console.log(`PlantSeed: HEX_HEIGHT=${Constants.HEX_HEIGHT}`);
     const yLevel = Math.round(worldPos.y / Constants.HEX_HEIGHT);
-    console.log(`PlantSeed: calculated yLevel=${yLevel}`);
-    console.log(`PlantSeed: sub-hex position = q:${position.q}, r:${position.r}, parentQ:${position.parentQ}, parentR:${position.parentR}`);
     const subHex3D: SubHexCoord3D = { ...position, y: yLevel };
     const plantType = PLANT_TYPES.get(typeId);
     if (!plantType) {
@@ -102,9 +98,7 @@ export class PlantSimulation {
     const soilKey = HexUtils.hex3DToKey(parentHex);
     const allHexes = this.waterSimulation.getAllHexes();
     const hasSoil = allHexes.some(h => HexUtils.hex3DToKey(h.coord) === soilKey);
-    console.log(`PlantSeed: Checking for soil at y=${soilYLevel}, found=${hasSoil}`);
     if (!hasSoil) {
-      console.log('Cannot plant here - no soil');
       return null;
     }
     
@@ -112,7 +106,6 @@ export class PlantSimulation {
     const stage0 = plantType.growthStages[0];
     // Use the base pattern for checking - randomization happens after
     if (!this.canOccupyPattern(subHex3D, stage0.hexPattern)) {
-      console.log('Cannot plant here - space occupied');
       return null;
     }
     
@@ -204,7 +197,6 @@ export class PlantSimulation {
         
         if (timeSinceLastAttempt > 1000) { // Only try once per second
           plant.lastGrowthAttempt = now;
-          console.log(`[PlantSimulation] Plant ${plantId} ready to advance from stage ${plant.currentStage} (timer: ${plant.growthTimer}/${currentStage.duration})`);
           this.tryAdvanceStage(plantId, plant, plantType);
         }
       }
@@ -530,9 +522,6 @@ export class PlantSimulation {
     }
     
     const nextStage = plantType.growthStages[nextStageIndex];
-    console.log(`Plant ${plantId} trying to advance from ${plantType.growthStages[plant.currentStage].name} to ${nextStage.name}`);
-    console.log(`Plant position: y=${plant.position.y}, checking for roots at y=${plant.position.y - 1}`);
-    console.log(`Plant position: q=${plant.position.q}, r=${plant.position.r}, parentQ=${plant.position.parentQ}, parentR=${plant.position.parentR}`);
     
     // Use cached pattern if available (for stunted plants retrying)
     let randomizedNextPattern: SubHexOccupation[];
@@ -548,27 +537,22 @@ export class PlantSimulation {
     
     // Check if next stage hexes are available
     const canOccupy = this.canOccupyPattern(plant.position, randomizedNextPattern, plantId);
-    console.log(`Can occupy pattern: ${canOccupy}`);
     if (canOccupy) {
       // Simple fix: Don't release sub-hexes, just try to claim the new pattern
       // The spatial index should handle overlaps properly
-      console.log(`Attempting to claim ${randomizedNextPattern.length} sub-hexes for growth`);
       
       // First, let's just try claiming without releasing
       const testClaim = this.claimPattern(plantId, plant.position, randomizedNextPattern);
       
       if (!testClaim) {
         // If that fails, release all and try again
-        console.log(`Direct claim failed, releasing all sub-hexes and retrying`);
         this.spatialIndex.releaseAllSubHexes(plantId);
         const claimed = this.claimPattern(plantId, plant.position, randomizedNextPattern);
-        console.log(`Claim after release: ${claimed}`);
         
         if (!claimed) {
           // Try to reclaim the old pattern
           const currentPattern = this.getPlantPattern(plant, plantType);
           this.claimPattern(plantId, plant.position, currentPattern);
-          console.log(`Growth failed, restored original pattern`);
         } else {
           // Pattern already stored above
           plant.currentStage = nextStageIndex;
@@ -583,7 +567,6 @@ export class PlantSimulation {
           // Deplete nutrients on growth
           this.depleteNutrientsForGrowth(plant, plantType);
           
-          console.log(`Plant ${plantId} advanced to stage ${nextStage.name}`);
         }
       } else {
         // Direct claim succeeded
@@ -599,7 +582,6 @@ export class PlantSimulation {
         // Deplete nutrients on growth
         this.depleteNutrientsForGrowth(plant, plantType);
         
-        console.log(`Plant ${plantId} advanced to stage ${nextStage.name}`);
       }
     } else {
       // Enter stunted state
@@ -610,12 +592,10 @@ export class PlantSimulation {
       // Find what's blocking
       const blockers = this.findBlockingPlants(plant.position, randomizedNextPattern, plantId);
       plant.stuntedBy = blockers;
-      console.log(`Plant ${plantId} stunted by:`, blockers);
     }
   }
   
   private canOccupyPattern(origin: SubHexCoord3D, pattern: SubHexOccupation[], excludePlant?: string): boolean {
-    console.log(`canOccupyPattern: Checking ${pattern.length} components from origin y=${origin.y}`);
     for (const hex of pattern) {
       // Calculate absolute sub-hex position
       const absoluteSubHex: SubHexCoord3D = {
@@ -633,7 +613,6 @@ export class PlantSimulation {
       
       const occupant = this.spatialIndex.getOccupant(actualSubHex3D);
       if (occupant && occupant !== excludePlant) {
-        console.log(`  Growth blocked: space occupied by ${occupant} at y=${actualSubHex3D.y}`);
         return false;
       }
       
@@ -653,14 +632,9 @@ export class PlantSimulation {
         }
         
         if (!hasAnySoil) {
-          console.log(`Plant growth blocked: no soil for roots at y=${actualSubHex3D.y}`);
           // Debug: show what hexes exist at this y level
           const allHexesAtY = this.waterSimulation.getAllHexes()
             .filter(h => h.coord.y === actualSubHex3D.y);
-          console.log(`  Total soil hexes at y=${actualSubHex3D.y}: ${allHexesAtY.length}`);
-          console.log(`  Root trying to grow at absolute sub-hex: q=${absoluteSubHex.q}, r=${absoluteSubHex.r}`);
-          console.log(`  After conversion, actual sub-hex: q=${actualSubHex.q}, r=${actualSubHex.r}, parentQ=${actualSubHex.parentQ}, parentR=${actualSubHex.parentR}`);
-          console.log(`  Checking main hexes for this root component`);
           return false;
         }
       }
@@ -670,7 +644,6 @@ export class PlantSimulation {
   
   private claimPattern(plantId: string, origin: SubHexCoord3D, pattern: SubHexOccupation[]): boolean {
     const claimed: SubHexCoord3D[] = [];
-    console.log(`claimPattern: Attempting to claim ${pattern.length} sub-hexes for ${plantId}`);
     
     // Try to claim all sub-hexes
     for (const hex of pattern) {
@@ -690,9 +663,7 @@ export class PlantSimulation {
       
       if (!this.spatialIndex.claimSubHex(actualSubHex3D, plantId)) {
         // Rollback on failure
-        console.log(`  Failed to claim sub-hex at (${actualSubHex3D.q},${actualSubHex3D.r},${actualSubHex3D.y}) - ${hex.type}`);
         const currentOccupant = this.spatialIndex.getOccupant(actualSubHex3D);
-        console.log(`  Current occupant: ${currentOccupant}`);
         for (const pos of claimed) {
           this.spatialIndex.releaseSubHex(pos);
         }
@@ -813,7 +784,6 @@ export class PlantSimulation {
     const baseYield = currentStage.harvestYield || 0;
     
     if (baseYield === 0) {
-      console.log('Plant not ready for harvest');
       return 0;
     }
     
@@ -833,7 +803,6 @@ export class PlantSimulation {
       plant.lastHarvest = Date.now();
     }
     
-    console.log(`Harvested ${actualYield} ${plantType.name}`);
     return actualYield;
   }
   
@@ -862,7 +831,6 @@ export class PlantSimulation {
     // Remove from world
     this.removePlant(plantId);
     
-    console.log(`Uprooted ${plantType.name}`);
     return uprootedData;
   }
   
@@ -903,7 +871,6 @@ export class PlantSimulation {
     }
     
     this.plants.set(plantId, plant);
-    console.log(`Replanted ${plantType.name}`);
     return plantId;
   }
   
@@ -969,7 +936,6 @@ export class PlantSimulation {
       }
       
       // If no valid randomization found after 10 attempts, return base pattern
-      console.log('Could not find valid randomization, using base pattern');
       return basePattern;
     }
     
@@ -986,8 +952,8 @@ export class PlantSimulation {
       
       // Add slight random offset to other components
       const maxOffset = 1; // Max offset in sub-hex units
-      const qOffset = Math.floor(Math.random() * (maxOffset * 2 + 1)) - maxOffset;
-      const rOffset = Math.floor(Math.random() * (maxOffset * 2 + 1)) - maxOffset;
+      const qOffset = Math.floor(plantConfig.getRandom() * (maxOffset * 2 + 1)) - maxOffset;
+      const rOffset = Math.floor(plantConfig.getRandom() * (maxOffset * 2 + 1)) - maxOffset;
       
       return {
         offset: {

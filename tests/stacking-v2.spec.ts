@@ -7,6 +7,10 @@ test.describe('Soil Stacking V2', () => {
     await page.goto('http://localhost:5173');
     await waitForGame(page);
     await page.waitForTimeout(1000); // Wait for camera to settle
+    
+    // Add test soil to inventory
+    await page.keyboard.press('t'); // Adds test materials including soil
+    await page.waitForTimeout(100);
   });
 
   test('should stack soil using direct placement', async ({ page }) => {
@@ -38,6 +42,26 @@ test.describe('Soil Stacking V2', () => {
   });
 
   test('should stack soil using mouse at center', async ({ page }) => {
+    // Directly select the slot with actual soil (not soil_placer)
+    const activeItem = await page.evaluate(() => {
+      const gameWindow = window as any;
+      const game = gameWindow.game;
+      
+      // Find the slot with soil resource (not the tool)
+      const slots = game.inventorySystem.getHotbarSlots();
+      for (let i = 0; i < slots.length; i++) {
+        const item = slots[i]?.item;
+        // Look for soil items that have nutrient values in their ID (e.g. soil_65-65-65)
+        if (item && item.id && item.id.startsWith('soil_') && item.id.includes('-')) {
+          // Directly set active slot
+          game.inventorySystem.setActiveHotbarSlot(i);
+          return { id: item.id, name: item.name, slot: i };
+        }
+      }
+      return null;
+    });
+    console.log('Active item:', activeItem);
+    
     // Get hex at center of screen
     const centerHex = await getHexAtCenter(page);
     console.log('Center hex:', centerHex);
@@ -63,6 +87,24 @@ test.describe('Soil Stacking V2', () => {
   });
 
   test('should update preview height when hovering over stacked soil', async ({ page }) => {
+    // Directly select the slot with actual soil (not soil_placer)
+    await page.evaluate(() => {
+      const gameWindow = window as any;
+      const game = gameWindow.game;
+      
+      // Find the slot with soil resource (not the tool)
+      const slots = game.inventorySystem.getHotbarSlots();
+      for (let i = 0; i < slots.length; i++) {
+        const item = slots[i]?.item;
+        // Look for soil items that have nutrient values in their ID (e.g. soil_65-65-65)
+        if (item && item.id && item.id.startsWith('soil_') && item.id.includes('-')) {
+          // Directly set active slot
+          game.inventorySystem.setActiveHotbarSlot(i);
+          break;
+        }
+      }
+    });
+    
     // Place base soil directly
     await placeSoilDirectly(page, 0, 0, 0);
     

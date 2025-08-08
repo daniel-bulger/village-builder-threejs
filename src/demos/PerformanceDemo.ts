@@ -32,7 +32,6 @@ export class PerformanceDemo {
   
   // Create a large test world
   createTestWorld(size: number = 50): void {
-    console.log(`Creating test world with ${size}x${size} hexes...`);
     
     // Create hexagonal pattern
     for (let q = -size; q <= size; q++) {
@@ -57,12 +56,10 @@ export class PerformanceDemo {
       }
     }
     
-    console.log(`Created ${this.standardWaterSim.getAllHexes().length} soil hexes`);
   }
   
   // Benchmark water simulation
   benchmarkWaterSimulation(iterations: number = 100): void {
-    console.log(`\n=== Water Simulation Benchmark (${iterations} ticks) ===`);
     
     // Benchmark standard simulation
     const standardStart = performance.now();
@@ -79,14 +76,10 @@ export class PerformanceDemo {
     const optimizedTime = performance.now() - optimizedStart;
     
     // Results
-    console.log(`Standard water sim: ${standardTime.toFixed(2)}ms total, ${(standardTime/iterations).toFixed(2)}ms per tick`);
-    console.log(`Optimized water sim: ${optimizedTime.toFixed(2)}ms total, ${(optimizedTime/iterations).toFixed(2)}ms per tick`);
-    console.log(`Speed improvement: ${((standardTime/optimizedTime - 1) * 100).toFixed(1)}% faster`);
   }
   
   // Benchmark soil rendering
   benchmarkSoilRendering(): void {
-    console.log(`\n=== Soil Rendering Benchmark ===`);
     
     const hexCount = this.standardWaterSim.getAllHexes().length;
     
@@ -101,23 +94,12 @@ export class PerformanceDemo {
     const instancedDrawCalls = instancedMeshCount;
     const instancedMemory = instancedStats.memoryUsage;
     
-    console.log(`Standard rendering:`);
-    console.log(`  - Meshes: ${standardMeshCount}`);
-    console.log(`  - Draw calls: ${standardDrawCalls}`);
-    console.log(`  - Memory (est): ${(standardMemory / 1024 / 1024).toFixed(2)} MB`);
     
-    console.log(`Instanced rendering:`);
-    console.log(`  - Instanced meshes: ${instancedMeshCount}`);
-    console.log(`  - Draw calls: ${instancedDrawCalls}`);
-    console.log(`  - Memory: ${(instancedMemory / 1024 / 1024).toFixed(2)} MB`);
     
-    console.log(`Draw call reduction: ${((1 - instancedDrawCalls/standardDrawCalls) * 100).toFixed(1)}%`);
-    console.log(`Memory reduction: ${((1 - instancedMemory/standardMemory) * 100).toFixed(1)}%`);
   }
   
   // Benchmark plant rendering
   benchmarkPlantRendering(plantCount: number = 100): void {
-    console.log(`\n=== Plant Rendering Benchmark (${plantCount} plants) ===`);
     
     // Create mock plants
     const mockPlants: any[] = [];
@@ -148,15 +130,10 @@ export class PerformanceDemo {
     // Get stats
     const poolStats = this.optimizedPlantRenderer.getStats();
     
-    console.log(`Standard plant renderer: ${standardTime.toFixed(2)}ms for 10 updates`);
-    console.log(`Optimized plant renderer: ${optimizedTime.toFixed(2)}ms for 10 updates`);
-    console.log(`Speed improvement: ${((standardTime/optimizedTime - 1) * 100).toFixed(1)}% faster`);
-    console.log(`Mesh pool stats:`, poolStats.poolStats);
   }
   
   // Run all benchmarks
   runAllBenchmarks(): void {
-    console.log('🚀 Starting Performance Benchmarks...\n');
     
     // Create test world
     this.createTestWorld(30);
@@ -166,8 +143,6 @@ export class PerformanceDemo {
     this.benchmarkSoilRendering();
     this.benchmarkPlantRendering(50);
     
-    console.log('\n✅ Benchmarks complete!');
-    console.log('Add ?optimize=all to URL to enable optimizations in the game');
   }
   
   dispose(): void {
@@ -183,7 +158,6 @@ export function runPerformanceDemoIfRequested(scene: THREE.Scene): void {
   const urlParams = new URLSearchParams(window.location.search);
   
   if (urlParams.has('perfDemo')) {
-    console.log('Running performance demo...');
     const demo = new PerformanceDemo(scene);
     
     // Run benchmarks after a short delay
@@ -193,7 +167,6 @@ export function runPerformanceDemoIfRequested(scene: THREE.Scene): void {
       // Clean up after demo
       setTimeout(() => {
         demo.dispose();
-        console.log('Demo cleaned up. Reload page to run game normally.');
       }, 1000);
     }, 1000);
   }

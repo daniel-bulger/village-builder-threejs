@@ -84,10 +84,6 @@ export class PerformanceMonitor {
     const minFrameTime = Math.min(...this.frameTimes);
     const fps = 1000 / avgFrameTime;
     
-    console.log(`=== Performance Stats ===`);
-    console.log(`FPS: ${fps.toFixed(1)} (${avgFrameTime.toFixed(2)}ms avg)`);
-    console.log(`Frame time range: ${minFrameTime.toFixed(2)}ms - ${maxFrameTime.toFixed(2)}ms`);
-    console.log(`Frames rendered: ${this.frameCount}`);
   }
   
   reset(): void {

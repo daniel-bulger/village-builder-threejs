@@ -162,11 +162,25 @@ export class InventorySystem {
   
   setActiveSlot(index: number): void {
     if (index >= 0 && index < this.MAX_SLOTS) {
+      // Stop building placement when switching tools
+      if ((window as any).game?.buildingPlacer) {
+        (window as any).game.buildingPlacer.stopPlacement();
+      }
       this.activeSlot = index;
     }
   }
   
+  // Alias for compatibility with tests
+  setActiveHotbarSlot(index: number): void {
+    this.setActiveSlot(index);
+  }
+  
   getSlots(): InventorySlot[] {
+    return this.slots;
+  }
+  
+  // Method for compatibility with tests
+  getHotbarSlots(): InventorySlot[] {
     return this.slots;
   }
   

@@ -87,6 +87,17 @@ export class UnifiedInventorySystem {
       maxStack: 1,
       quantity: 1
     });
+    
+    // Construction Tool
+    this.addItem({
+      id: 'construction_tool',
+      type: ItemType.TOOL,
+      name: 'Construction Tool',
+      icon: '🔨',
+      stackable: false,
+      maxStack: 1,
+      quantity: 1
+    });
   }
   
   /**
@@ -172,7 +183,6 @@ export class UnifiedInventorySystem {
       }
     };
     
-    console.log('Adding soil with nutrients:', soil.nutrients);
     const index = this.addItem(soilItem);
     return index !== -1;
   }
@@ -329,6 +339,10 @@ export class UnifiedInventorySystem {
    */
   setActiveHotbarSlot(index: number): void {
     if (index >= 0 && index < this.HOTBAR_SIZE) {
+      // Stop building placement when switching tools
+      if ((window as any).game?.buildingPlacer) {
+        (window as any).game.buildingPlacer.stopPlacement();
+      }
       this.activeHotbarSlot = index;
     }
   }
@@ -466,22 +480,18 @@ export class UnifiedInventorySystem {
     
     // Both must have soil items
     if (!fromSlot.item || !toSlot.item) {
-      console.log('combineSoils: one or both slots have no item');
       return false;
     }
     if (fromSlot.item.type !== ItemType.RESOURCE || !fromSlot.item.id.startsWith('soil_')) {
-      console.log('combineSoils: from item is not soil');
       return false;
     }
     if (toSlot.item.type !== ItemType.RESOURCE || !toSlot.item.id.startsWith('soil_')) {
-      console.log('combineSoils: to item is not soil');
       return false;
     }
     
     const fromSoil = fromSlot.item.metadata?.soilData;
     const toSoil = toSlot.item.metadata?.soilData;
     if (!fromSoil || !toSoil) {
-      console.log('combineSoils: missing soil metadata', { fromSoil, toSoil });
       return false;
     }
     
@@ -501,15 +511,9 @@ export class UnifiedInventorySystem {
       // Different nutrients, mix them
       const totalQuantity = fromSlot.quantity + toSlot.quantity;
       if (totalQuantity > toSlot.item.maxStack) {
-        console.log(`combineSoils: would exceed max stack (${totalQuantity} > ${toSlot.item.maxStack})`);
         return false; // Would exceed stack size
       }
       
-      console.log('combineSoils: mixing different soils', {
-        from: fromSlot.item.id,
-        to: toSlot.item.id,
-        totalQuantity
-      });
       
       // Calculate weighted average of nutrients
       const fromWeight = fromSlot.quantity / totalQuantity;

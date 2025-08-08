@@ -41,7 +41,6 @@ export class VillagerManager {
       }
     });
     
-    console.log(`Generated ${this.availableVillagers.length} potential villagers`);
   }
   
   private createVillagerFromArchetype(archetype: VillagerArchetype): Villager {
@@ -121,21 +120,18 @@ export class VillagerManager {
   // Start a recruitment attempt
   startRecruitment(foodType: string, foodQuality: number, garden: any): RecruitmentAttempt | null {
     if (this.recruitmentInProgress) {
-      console.log("Recruitment already in progress!");
       return null;
     }
     
     const interestedVillagers = this.getInterestedVillagers(foodType, foodQuality);
     
     if (interestedVillagers.length === 0) {
-      console.log("No villagers interested in this food");
       return null;
     }
     
     // Pick a random interested villager
     const villager = interestedVillagers[Math.floor(Math.random() * interestedVillagers.length)];
     
-    console.log(`${villager.state.name} is interested in your ${foodType}!`);
     
     // Bring villager to the garden
     this.visitingVillager = villager;
@@ -290,7 +286,6 @@ export class VillagerManager {
   }
   
   private recruitVillager(villager: Villager): void {
-    console.log(`${villager.state.name} has joined your village!`);
     
     // Remove from available pool
     const index = this.availableVillagers.indexOf(villager);

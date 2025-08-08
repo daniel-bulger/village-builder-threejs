@@ -140,7 +140,6 @@ class Application {
       const total = avgGame + avgRender;
       
       if (total > 16) { // Only log if frame time exceeds 16ms (60fps threshold)
-        console.log(`Performance (avg over 60 frames): Game: ${avgGame.toFixed(1)}ms, Render: ${avgRender.toFixed(1)}ms, Total: ${total.toFixed(1)}ms`);
       }
       
       // Reset arrays to prevent memory growth

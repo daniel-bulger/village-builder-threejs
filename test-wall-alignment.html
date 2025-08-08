@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Wall Alignment Test</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        Click to place foundation, then walls<br>
+        Press R to rotate wall placement<br>
+        Green lines show wall placement guides
+    </div>
+    <script type="module">
+        import * as THREE from './node_modules/three/build/three.module.js';
+        import { OrbitControls } from './node_modules/three/examples/jsm/controls/OrbitControls.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x202020);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(5, 10, 5);
+        camera.lookAt(0, 0, 0);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        const controls = new OrbitControls(camera, renderer.domElement);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        directionalLight.position.set(10, 10, 5);
+        scene.add(directionalLight);
+        
+        // Grid
+        const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+        scene.add(gridHelper);
+        
+        // Hex foundation (rotated 90°)
+        const hexShape = new THREE.Shape();
+        for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3 + Math.PI / 3; // Start at 60° (rotated)
+            const x = Math.cos(angle);
+            const z = Math.sin(angle);
+            if (i === 0) {
+                hexShape.moveTo(x, z);
+            } else {
+                hexShape.lineTo(x, z);
+            }
+        }
+        hexShape.closePath();
+        
+        const extrudeSettings = { depth: 0.1, bevelEnabled: false };
+        const hexGeometry = new THREE.ExtrudeGeometry(hexShape, extrudeSettings);
+        const hexMaterial = new THREE.MeshStandardMaterial({ color: 0x606060 });
+        const hexMesh = new THREE.Mesh(hexGeometry, hexMaterial);
+        hexMesh.rotation.x = -Math.PI / 2;
+        scene.add(hexMesh);
+        
+        // Wall placement guides
+        const edgeGuides = [];
+        for (let i = 0; i < 6; i++) {
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(6);
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.LineBasicMaterial({ 
+                color: 0x00ff00, 
+                linewidth: 3,
+                depthTest: false 
+            });
+            
+            const line = new THREE.LineSegments(geometry, material);
+            
+            // Calculate edge positions (rotated hex)
+            const angle1 = (i * Math.PI) / 3 + Math.PI / 3;
+            const angle2 = angle1 + Math.PI / 3;
+            
+            positions[0] = Math.cos(angle1);
+            positions[1] = 0.05;
+            positions[2] = Math.sin(angle1);
+            positions[3] = Math.cos(angle2);
+            positions[4] = 0.05;
+            positions[5] = Math.sin(angle2);
+            
+            geometry.attributes.position.needsUpdate = true;
+            scene.add(line);
+            edgeGuides.push(line);
+        }
+        
+        // Walls
+        const walls = [];
+        let currentEdge = 0;
+        
+        function addWall(edge) {
+            // Wall dimensions
+            const thickness = 0.2;
+            const height = 3;
+            const length = 1.732;
+            
+            // Create wall geometry (thickness along X, length along Z)
+            const wallGeometry = new THREE.BoxGeometry(thickness, height, length);
+            const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x8B6F47 });
+            const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+            
+            // Position at edge midpoint
+            const midpointAngle = (edge * Math.PI) / 3 + Math.PI / 2;
+            const edgeDistance = Math.sqrt(3) / 2;
+            wall.position.x = Math.cos(midpointAngle) * edgeDistance;
+            wall.position.y = height / 2;
+            wall.position.z = Math.sin(midpointAngle) * edgeDistance;
+            
+            // Rotate to align with edge
+            wall.rotation.y = (edge * Math.PI) / 3 + Math.PI / 2;
+            
+            scene.add(wall);
+            walls.push(wall);
+        }
+        
+        // Add all walls
+        for (let i = 0; i < 6; i++) {
+            addWall(i);
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

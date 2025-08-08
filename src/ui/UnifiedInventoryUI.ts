@@ -457,11 +457,9 @@ export class UnifiedInventoryUI {
     }
     
     if (this.draggedFromIndex === null) {
-      console.log('onDrop: no draggedFromIndex');
       return;
     }
     
-    console.log(`onDrop: from ${this.draggedFromIndex} to ${dropIndex}`);
     
     // Check if both slots contain soil
     const fromItem = this.unifiedInventory.getInventoryItem(this.draggedFromIndex);
@@ -490,7 +488,6 @@ export class UnifiedInventoryUI {
           
           if (totalQuantity > 10) {
             // Would exceed max stack size - show a visual indication
-            console.log('Cannot combine: would exceed max stack size of 10');
             // Still clean up state
             this.draggedFromIndex = null;
             this.draggedFromHotbar = false;

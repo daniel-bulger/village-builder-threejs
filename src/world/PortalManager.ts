@@ -86,7 +86,6 @@ export class PortalManager {
     // Update last portal day
     this.lastPortalDay = Math.floor(this.getCurrentDay());
     
-    console.log(`Portal spawned: ${biomeType} at (${spawnPosition.x.toFixed(1)}, ${spawnPosition.z.toFixed(1)})`);
   }
   
   private removeActivePortal(): void {
@@ -143,6 +142,5 @@ export class PortalManager {
     this.activePortal = new Portal(config);
     this.scene.add(this.activePortal.mesh);
     
-    console.log(`Force spawned portal: ${selectedBiome}`);
   }
 }
